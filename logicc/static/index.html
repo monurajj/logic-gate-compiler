@@ -1,0 +1,992 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Logic Gate Compiler</title>
+<style>
+  :root {
+    --bg: #f4f6fb; --panel: #ffffff; --ink: #1d2433; --muted: #6b7385; --line: #e2e6ef;
+    --accent: #4f46e5; --accent-soft: #eef0ff; --ok: #16a34a; --ok-soft: #e8f7ee;
+    --err: #dc2626; --err-soft: #fdecec; --warn: #b45309; --warn-soft: #fff5e1;
+    --note: #0e7490; --note-soft: #e6f6fa; --hi: #16a34a; --lo: #9aa3b5;
+    --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+         background: var(--bg); color: var(--ink); font-size: 15px; }
+  header { display: flex; align-items: center; gap: 14px; padding: 12px 22px;
+           background: linear-gradient(90deg, #312e81, #4f46e5); color: #fff; }
+  header .logo { font-size: 26px; }
+  header h1 { margin: 0; font-size: 20px; font-weight: 650; }
+  header .sub { opacity: .85; font-size: 13px; }
+  header .team { margin-left: auto; font-size: 13px; background: rgba(255,255,255,.15);
+                 padding: 5px 12px; border-radius: 999px; }
+  header .info { background: rgba(255,255,255,.2); color: #fff; border-color: rgba(255,255,255,.5); }
+
+  .layout { display: grid; grid-template-columns: minmax(340px, 34%) 1fr; gap: 16px; padding: 16px;
+            height: calc(100vh - 62px); }
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
+           display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
+  .panel-head { display: flex; align-items: center; gap: 8px; padding: 10px 12px;
+                border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+  .panel-head .title { font-weight: 650; margin-right: auto; }
+  select, button, input[type=number] { font: inherit; font-size: 13px; }
+  select { padding: 5px 8px; border: 1px solid var(--line); border-radius: 7px; background: #fff; }
+  .btn { padding: 6px 14px; border-radius: 7px; border: 1px solid var(--accent); background: var(--accent);
+         color: #fff; cursor: pointer; font-weight: 600; }
+  .btn:hover { filter: brightness(1.08); }
+  .btn.ghost { background: #fff; color: var(--accent); }
+  .btn.pending { background: #f59e0b; border-color: #f59e0b; animation: pulse 1.2s infinite; }
+  .btn[hidden] { display: none; }
+  label.opt { font-size: 13px; color: var(--muted); display: flex; align-items: center; gap: 5px; }
+
+  /* ---- info icon + tooltip ---- */
+  .info { display: inline-flex; align-items: center; justify-content: center; width: 15px; height: 15px;
+          margin-left: 4px; border-radius: 50%; border: 1px solid #a5b4fc; background: var(--accent-soft);
+          color: var(--accent); font: italic 700 10px/1 Georgia, "Times New Roman", serif; cursor: help;
+          vertical-align: middle; flex: none; text-transform: none; letter-spacing: 0; user-select: none; }
+  .info:hover, .info:focus { background: var(--accent); color: #fff; border-color: var(--accent); outline: none; }
+  #tip { position: fixed; z-index: 1000; max-width: 330px; background: #111827; color: #f3f4f6;
+         font-size: 13px; line-height: 1.45; padding: 9px 12px; border-radius: 9px; pointer-events: none;
+         box-shadow: 0 8px 24px rgba(0,0,0,.25); opacity: 0; transition: opacity .12s; text-transform: none;
+         letter-spacing: 0; font-weight: 400; }
+  #tip.show { opacity: 1; }
+  #tip b { display: block; color: #a5b4fc; margin-bottom: 3px; font-size: 13.5px; }
+  #tip code { font-family: var(--mono); background: rgba(255,255,255,.12); padding: 0 4px; border-radius: 3px; }
+
+  .editor { position: relative; display: flex; flex: 1; min-height: 160px; font-family: var(--mono);
+            font-size: 14px; line-height: 21px; background: #0f172a; }
+  .gutter { padding: 10px 8px 10px 12px; color: #64748b; text-align: right; user-select: none;
+            overflow: hidden; white-space: pre; min-width: 44px; background: #0b1222; }
+  .gutter .bad { color: #f87171; font-weight: 700; }
+  textarea#src { flex: 1; resize: none; border: 0; outline: 0; padding: 10px 12px; background: transparent;
+                 color: #e2e8f0; font: inherit; line-height: inherit; white-space: pre; overflow: auto;
+                 tab-size: 4; caret-color: #fbbf24; }
+  .hint { font-size: 12px; color: var(--muted); padding: 6px 12px; border-top: 1px solid var(--line); line-height: 1.9; }
+  .hint code { background: var(--accent-soft); padding: 1px 5px; border-radius: 4px; font-size: 12px; }
+
+  .diags { max-height: 34%; overflow: auto; border-top: 1px solid var(--line); }
+  .diags h3 { margin: 0; padding: 8px 12px; font-size: 13px; color: var(--muted); font-weight: 600;
+              position: sticky; top: 0; background: #fff; border-bottom: 1px solid var(--line); z-index: 1; }
+  .diag { padding: 7px 12px; font-size: 13px; border-bottom: 1px solid var(--line); cursor: pointer; }
+  .diag:hover { filter: brightness(.97); }
+  .diag.error { background: var(--err-soft); } .diag.warning { background: var(--warn-soft); }
+  .diag.note { background: var(--note-soft); }
+  .diag .tag { font-weight: 700; font-size: 11px; text-transform: uppercase; margin-right: 6px; }
+  .diag.error .tag { color: var(--err); } .diag.warning .tag { color: var(--warn); } .diag.note .tag { color: var(--note); }
+  .diag .where { color: var(--muted); font-size: 12px; }
+  .allgood { padding: 10px 12px; color: var(--ok); font-size: 13px; font-weight: 600; }
+
+  .pipeline { display: flex; gap: 4px; padding: 10px; border-bottom: 1px solid var(--line); overflow-x: auto; }
+  .step { flex: 1; min-width: 100px; border: 1px solid var(--line); border-radius: 9px; padding: 7px 8px;
+          background: #fff; cursor: pointer; text-align: left; position: relative; color: var(--ink); }
+  .step .n { font-size: 11px; color: var(--muted); font-weight: 600; }
+  .step .nm { font-size: 12.5px; font-weight: 650; line-height: 1.25; }
+  .step .dot { position: absolute; top: 8px; right: 8px; width: 9px; height: 9px; border-radius: 50%; background: var(--lo); }
+  .step.ok .dot { background: var(--ok); } .step.error .dot { background: var(--err); }
+  .step.skipped { opacity: .5; }
+  .step.active { border-color: var(--accent); background: var(--accent-soft); box-shadow: 0 0 0 2px var(--accent) inset; }
+  .step.special .nm { color: var(--accent); }
+
+  .view { flex: 1; overflow: auto; padding: 18px 22px; }
+  .view h2 { margin: 0 0 4px; font-size: 20px; display: flex; align-items: center; }
+  .view .desc { color: var(--muted); margin: 0 0 16px; font-size: 14px; max-width: 920px; line-height: 1.6; }
+  .view h3 { font-size: 14px; margin: 18px 0 8px; color: #374151; text-transform: uppercase; letter-spacing: .04em;
+             display: flex; align-items: center; }
+  .navbar { display: flex; justify-content: space-between; align-items: center; padding: 8px 12px;
+            border-top: 1px solid var(--line); font-size: 13px; color: var(--muted); }
+
+  table.grid { border-collapse: collapse; font-size: 13.5px; }
+  table.grid th { background: #f1f3f9; text-align: left; font-weight: 650; white-space: nowrap; }
+  table.grid th, table.grid td { border: 1px solid var(--line); padding: 5px 10px; }
+  table.grid td.mono, .mono { font-family: var(--mono); }
+  table.grid tr.hl td { background: #fff7cc; }
+  .cols { display: flex; gap: 24px; flex-wrap: wrap; align-items: flex-start; }
+  .chip { display: inline-block; font-family: var(--mono); font-size: 12.5px; padding: 3px 7px; margin: 2px;
+          border-radius: 6px; border: 1px solid var(--line); }
+  .chip small { display: block; font-family: -apple-system, sans-serif; font-size: 9.5px; color: var(--muted); }
+  .legend-row { display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: center; font-size: 13px; margin: 8px 0; }
+  .legend-row .chip { margin: 0; }
+  .t-INPUT, .t-OUTPUT { background: #f3e8ff; } .t-IDENT { background: #e0f2fe; } .t-OP { background: #fef3c7; }
+  .t-CONST { background: #dcfce7; } .t-ASSIGN, .t-SEMI, .t-COMMA, .t-LPAREN, .t-RPAREN { background: #f1f5f9; }
+  pre.code { font-family: var(--mono); font-size: 14px; background: #0f172a; color: #e2e8f0; padding: 12px 16px;
+             border-radius: 9px; margin: 0; line-height: 1.6; overflow: auto; }
+  pre.code .ln { color: #64748b; user-select: none; }
+  pre.code .op { color: #fbbf24; font-weight: 700; } pre.code .reg { color: #7dd3fc; }
+  pre.code .cm { color: #64748b; } pre.code .tmp { color: #c4b5fd; } pre.code .k { color: #f472b6; }
+  .log { font-size: 13.5px; }
+  .log .row { display: grid; grid-template-columns: 80px 290px 1fr; gap: 8px; padding: 5px 8px;
+              border-bottom: 1px solid var(--line); align-items: center; }
+  .log .pass { font-weight: 650; color: var(--accent); display: flex; align-items: center; }
+  .log .msg { font-family: var(--mono); font-size: 13px; }
+  .metric { display: inline-flex; flex-direction: column; border: 1px solid var(--line); border-radius: 10px;
+            padding: 10px 16px; margin: 0 10px 8px 0; min-width: 170px; }
+  .metric .big { font-size: 26px; font-weight: 700; }
+  .metric .lbl { font-size: 12px; color: var(--muted); display: flex; align-items: center; }
+  .metric .down { color: var(--ok); font-size: 13px; font-weight: 600; }
+  .badge { display: inline-flex; align-items: center; padding: 8px 14px; border-radius: 9px; font-weight: 650; }
+  .badge.ok { background: var(--ok-soft); color: var(--ok); } .badge.err { background: var(--err-soft); color: var(--err); }
+  .blocked { padding: 30px; text-align: center; color: var(--muted); border: 2px dashed var(--line); border-radius: 12px; }
+  .blocked b { color: var(--err); }
+  .svgwrap { overflow: auto; border: 1px solid var(--line); border-radius: 10px; background: #fbfcff; }
+  .legend { font-size: 13px; color: var(--muted); margin: 8px 0; display: flex; align-items: center; flex-wrap: wrap; gap: 4px; }
+  .sw { display: inline-block; width: 22px; height: 4px; vertical-align: middle; margin: 0 4px 0 10px; border-radius: 2px; }
+  .checks { padding-left: 4px; list-style: none; }
+  .checks li { margin: 4px 0; } .checks li::before { content: "✔ "; color: var(--ok); }
+  .checks.failed li::before { content: "• "; color: var(--muted); }
+  svg text { font-family: -apple-system, "Segoe UI", Roboto, sans-serif; }
+  svg .clickable { cursor: pointer; }
+
+  /* ---- step-by-step animation ---- */
+  [data-step] { transition: opacity .35s ease, background-color .8s ease, box-shadow .8s ease; }
+  .step-hidden { opacity: 0 !important; }
+  .chip.step-new { box-shadow: 0 0 0 2px #f59e0b; background: #fde68a; }
+  tr.step-new td { background: #fde68a !important; }
+  pre.code span.step-new { background: rgba(251,191,36,.35); border-radius: 3px; }
+  li.step-new, .row.step-new, div.step-new { background: #fef3c7; border-radius: 6px; }
+  g.step-new rect { stroke-width: 3.5; fill: #fef3c7; }
+  .animbar { display: flex; align-items: center; gap: 6px; }
+  .btn.play { background: #16a34a; border-color: #16a34a; }
+  .btn.small { padding: 6px 10px; }
+  #animcap { position: sticky; top: -18px; z-index: 2; margin: -18px -22px 14px; padding: 9px 22px;
+             background: #111827; color: #fff; font-size: 14px; display: flex; align-items: center; gap: 12px; }
+  #animcap .pulse { width: 10px; height: 10px; border-radius: 50%; background: #22c55e; animation: pulse 1s infinite; flex: none; }
+  #animcap .bar { flex: 1; height: 6px; background: rgba(255,255,255,.15); border-radius: 3px; overflow: hidden; max-width: 260px; }
+  #animcap .bar i { display: block; height: 100%; background: #22c55e; width: 0; transition: width .3s; }
+  @keyframes pulse { 50% { opacity: .3; } }
+</style>
+</head>
+<body>
+<header>
+  <div class="logo">⚡</div>
+  <div>
+    <h1>Logic Gate Compiler</h1>
+    <div class="sub"><span data-g="compiler">A 7-phase compiler</span> for <span data-g="boolean">Boolean circuits</span>:
+      source → tokens → AST → TAC → optimised → assembly → truth table</div>
+  </div>
+  <div class="team">Compiler Design · CD_2023_Team_1</div>
+</header>
+
+<div class="layout">
+  <section class="panel">
+    <div class="panel-head">
+      <span class="title" data-g="source">Source program</span>
+      <select id="examples" title="Load an example"></select>
+      <label class="opt"><input type="checkbox" id="optimize" checked> <span data-g="optimise">Optimise</span></label>
+      <label class="opt"><span data-g="registers">Registers</span>
+        <select id="regs"><option>3</option><option selected>4</option><option>5</option><option>6</option><option>8</option></select>
+      </label>
+      <label class="opt"><input type="checkbox" id="auto" checked> <span data-g="autocompile">Auto-compile</span></label>
+      <button class="btn" id="compile" title="Run all 7 phases on the code (Ctrl/⌘+Enter)" hidden>▶ Compile</button>
+    </div>
+    <div class="editor">
+      <div class="gutter" id="gutter">1</div>
+      <textarea id="src" spellcheck="false" autocomplete="off"></textarea>
+    </div>
+    <div class="hint" id="hint"></div>
+    <div class="diags" id="diags"></div>
+  </section>
+
+  <section class="panel">
+    <nav class="pipeline" id="pipeline"></nav>
+    <div class="view" id="view"></div>
+    <div class="navbar">
+      <button class="btn ghost" id="prev">◀ Previous</button>
+      <div class="animbar">
+        <button class="btn play" id="play" title="Animate the whole compilation, phase by phase">▶ Step-by-step</button>
+        <button class="btn ghost small" id="stopAnim" title="Stop the animation" hidden>■ Stop</button>
+        <select id="speed" title="Animation speed"><option value="0.5">0.5×</option><option value="1" selected>1×</option><option value="2">2×</option><option value="4">4×</option></select>
+        <span id="navinfo">Use ← → arrow keys to move between phases</span>
+      </div>
+      <button class="btn ghost" id="next">Next ▶</button>
+    </div>
+  </section>
+</div>
+<div id="tip"></div>
+
+<script>
+"use strict";
+const $ = s => document.querySelector(s);
+const esc = s => String(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+
+/* =====================================================================
+   GLOSSARY: every term that gets an (i) icon.  key: [title, meaning]
+   Text inside `backticks` is shown as code.
+   ===================================================================== */
+const G = {
+  // general
+  compiler: ["Compiler", "A program that translates code written in one language (our logic-gate language) into another (machine assembly), passing through several phases."],
+  boolean: ["Boolean circuit", "A circuit whose signals are only 0 (false/off) or 1 (true/on), built from logic gates."],
+  source: ["Source program", "The code the user writes in our logic-gate language. It is the input to the compiler."],
+  autocompile: ["Auto-compile", "When ticked, the code is compiled automatically a moment after you stop typing. Untick it to compile only when you click the Compile button (or press `Ctrl/⌘+Enter`)."],
+  optimise: ["Optimise (on/off)", "Turns Phase 5 (code optimisation) on or off, so you can compare the code with and without it."],
+  registers: ["Registers", "How many registers (very fast storage slots inside the processor) the target machine has. With fewer registers the compiler may need to spill values to memory."],
+  gates: ["Logic gates", "The basic building blocks of digital circuits. Each gate takes 0/1 inputs and produces a 0/1 output."],
+  symbols: ["Symbol shortcuts", "Short forms you can type instead of gate names: `&` = AND, `|` = OR, `^` = XOR, `!` or `~` = NOT."],
+  declaration: ["Declaration", "A statement that introduces names. `input a, b;` declares inputs and `output y;` declares outputs."],
+  assignment: ["Assignment", "Gives a signal its value, e.g. `y = a AND b;`. Each signal can be assigned only once."],
+  comment: ["Comments", "Notes for humans, ignored by the compiler: `# ...`, `// ...` or `/* ... */`."],
+  // gates
+  AND: ["AND gate", "Output is 1 only when BOTH inputs are 1."],
+  OR: ["OR gate", "Output is 1 when AT LEAST ONE input is 1."],
+  NOT: ["NOT gate (inverter)", "Flips the input: 0 becomes 1 and 1 becomes 0."],
+  XOR: ["XOR gate (exclusive OR)", "Output is 1 when the two inputs are DIFFERENT."],
+  NAND: ["NAND gate", "NOT of AND: output is 0 only when both inputs are 1."],
+  NOR: ["NOR gate", "NOT of OR: output is 1 only when both inputs are 0."],
+  XNOR: ["XNOR gate", "NOT of XOR: output is 1 when the two inputs are EQUAL."],
+  // phases
+  lexical: ["Phase 1: Lexical Analysis", "Reads the source code character by character and groups the characters into meaningful units called tokens. Spaces and comments are removed here."],
+  syntax: ["Phase 2: Syntax Analysis", "Checks that the tokens follow the grammar rules of the language and builds a tree (the AST) that shows the program's structure."],
+  semantic: ["Phase 3: Semantic Analysis", "Checks the MEANING of the program, e.g. every signal is defined before use and inputs are not assigned. It also fills the symbol table."],
+  icg: ["Phase 4: Intermediate Code Generation", "Converts the tree into simple, machine-independent code (three-address code) that is easy to optimise and translate."],
+  optimization: ["Phase 5: Code Optimization", "Improves the intermediate code without changing its result: fewer instructions and fewer logic gates."],
+  codegen: ["Phase 6: Target Code Generation", "Translates the optimised code into assembly instructions for the target machine and decides which value is kept in which register."],
+  execution: ["Phase 7: Execution & Verification", "Runs the generated assembly on a virtual machine for every input combination and checks the answers against the original program."],
+  livecircuit: ["Live Circuit", "The optimised code drawn as a real logic-gate circuit. Click the inputs to change them and watch the outputs update."],
+  // diagnostics
+  errorhandler: ["Error handler", "A part of the compiler used by every phase. It collects all errors and warnings with their line and column, instead of stopping at the first problem."],
+  error: ["Error", "A problem that stops compilation. The program must be fixed before later phases can run."],
+  warning: ["Warning", "A possible mistake that does NOT stop compilation, e.g. an input that is never used."],
+  note: ["Note", "Extra information from the compiler. Not a problem."],
+  // phase 1
+  scanner: ["Scanner (lexer)", "Another name for the lexical analyser, the part of the compiler that produces tokens."],
+  token: ["Token", "The category of a word in the program, e.g. IDENT (a name), OP (an operator), SEMI (;). Like 'noun' or 'verb' in English grammar."],
+  lexeme: ["Lexeme", "The exact text from the source code that makes up a token, e.g. `cin` or `AND`."],
+  attribute: ["Attribute", "Extra information stored with a token, e.g. which gate an OP token is, or the value of a constant."],
+  linecol: ["Line : Column", "Where the token is in the source code. Error messages use this to point at the exact spot."],
+  tokenstream: ["Token stream", "The list of tokens in order, produced by the scanner. This is the input to the parser."],
+  tokentable: ["Token table", "Every token with its lexeme, type, attribute and position."],
+  tokentypes: ["Token types", "The categories of tokens this language has."],
+  "tt-KEYWORD": ["Keyword (INPUT / OUTPUT)", "Reserved words with a special meaning: `input`, `output`. They cannot be used as signal names."],
+  "tt-IDENT": ["IDENT (identifier)", "A name chosen by the programmer for a signal, e.g. `a`, `cin`, `sum`."],
+  "tt-CONST": ["CONST (constant)", "A fixed value: `0`, `1`, `true` or `false`."],
+  "tt-OP": ["OP (operator)", "A logic gate operator: AND, OR, NOT, XOR, NAND, NOR, XNOR (or & | ! ^ ~)."],
+  "tt-ASSIGN": ["ASSIGN", "The `=` sign used in an assignment."],
+  "tt-PUNCT": ["Punctuation", "SEMI `;` ends a statement, COMMA `,` separates names, LPAREN/RPAREN `( )` group expressions."],
+  // phase 2
+  parser: ["Parser", "The part of the compiler that performs syntax analysis."],
+  recursive: ["Recursive descent", "A top-down parsing method: each grammar rule becomes a function, and functions call each other following the rules."],
+  ll1: ["LL(1)", "The parser reads input Left to right, builds a Leftmost derivation, and looks only 1 token ahead to decide what to do."],
+  ast: ["AST (Abstract Syntax Tree)", "A tree that shows the program's structure. Operators are inner nodes, and variables/constants are leaves. Punctuation like ; and ( ) is left out."],
+  precedence: ["Operator precedence", "Which operator is applied first when there are no brackets. Here: NOT first, then AND/NAND, then XOR/XNOR, then OR/NOR."],
+  associativity: ["Left associativity", "Operators of equal precedence group from the left: `a AND b AND c` means `(a AND b) AND c`."],
+  panic: ["Panic-mode recovery", "After a syntax error, the parser skips tokens until a safe point (like `;`) and continues, so it can report several errors in one run."],
+  grammar: ["Grammar", "The set of rules that defines which programs are valid in the language."],
+  ebnf: ["EBNF", "Extended Backus–Naur Form, a notation for grammar rules. `→` means 'is made of', `|` means 'or', `*` means 'zero or more times'."],
+  leftrec: ["Left recursion removal", "A rule like `E → E OR T` would make a top-down parser loop forever, so it is rewritten as `E → T (OR T)*`."],
+  "ast-Program": ["Program node", "The root of the tree. Its children are the statements."],
+  "ast-Declaration": ["Declaration node", "An `input` or `output` statement with its list of names."],
+  "ast-Assign": ["Assignment node", "`target =` with the expression tree below it."],
+  "ast-Gate": ["Gate node", "A logic operator. Its children are its operands."],
+  "ast-Var": ["Variable node", "A leaf that refers to a signal by name."],
+  "ast-Const": ["Constant node", "A leaf with a fixed value 0 or 1."],
+  // phase 3
+  symtab: ["Symbol table", "A table storing information about every name in the program (kind, type, where it is declared and used). All later phases read it."],
+  kind: ["Kind", "Whether the signal is an input, an output, or an internal wire."],
+  input: ["Input", "A signal that comes from outside the circuit, like a switch. It can be read but never assigned."],
+  output: ["Output", "A signal the circuit produces, like a bulb. It must be assigned exactly once."],
+  wire: ["Wire", "An internal signal: assigned inside the circuit but not declared as an input or output."],
+  type: ["Type", "The data type. Every signal here is a `bit`: it holds 0 or 1."],
+  declared: ["Declared @", "The line where the name first appears (declared, or first assigned)."],
+  assigned: ["Assigned @", "The line where the signal gets its value. Inputs have none because they come from outside."],
+  uses: ["Uses", "How many times the signal is read in expressions. An input with 0 uses gives a warning."],
+  implicit: ["Implicit", "Not declared by the user. The compiler inferred it, e.g. undeclared names become inputs when the program declares no inputs."],
+  driver: ["Driver", "The assignment that gives a signal its value. In hardware a wire cannot have two drivers."],
+  loop: ["Combinational loop", "A signal that depends on itself, e.g. `z = z XOR a`. Not allowed in a combinational circuit."],
+  checks: ["Semantic checks", "Rules a valid circuit must follow. The parser cannot check them because they are about meaning, not form."],
+  // phase 4
+  tac: ["Three-Address Code (TAC)", "Each instruction has at most one operator and three addresses (two operands and one result), e.g. `t1 = a AND b`."],
+  temporary: ["Temporary", "A variable created by the compiler (t1, t2, …) to hold the result of each gate in a bigger expression."],
+  quadruples: ["Quadruples", "TAC stored as a table with 4 fields: op, arg1, arg2, result."],
+  triples: ["Triples", "TAC stored with only 3 fields: op, arg1, arg2. Results are referred to by row number, like (0), instead of by a temporary name."],
+  op: ["op", "The operator (gate) of the instruction. `=` means a simple copy."],
+  arg1: ["arg1", "The first operand."],
+  arg2: ["arg2", "The second operand (empty for NOT and copy)."],
+  result: ["result", "Where the answer is stored."],
+  // phase 5
+  "Constant folding": ["Constant folding", "Calculating operations on constants at compile time, e.g. `1 XOR 0` becomes `1`."],
+  "Algebraic simplification": ["Algebraic simplification", "Using Boolean algebra laws, e.g. `a AND 1 = a`, `a XOR a = 0`, `a OR NOT a = 1`."],
+  "Double negation": ["Double negation", "`NOT (NOT a)` is the same as `a`."],
+  "Common subexpression elimination": ["Common Subexpression Elimination (CSE)", "If the same expression is computed twice (e.g. `a AND b` and `b AND a`), compute it once and reuse the result."],
+  "Copy propagation": ["Copy propagation", "After `t1 = a`, later uses of t1 are replaced by a directly."],
+  "Constant propagation": ["Constant propagation", "After `k = 1`, later uses of k are replaced by 1."],
+  "Copy coalescing": ["Copy coalescing", "Merges `t3 = a XOR b; s = t3` into `s = a XOR b`, removing the extra copy."],
+  "Dead code elimination": ["Dead code elimination", "Removes instructions whose results are never used by any output."],
+  round: ["Round", "The optimiser runs all passes again and again. It stops when a round changes nothing (a 'fixed point')."],
+  tacinstr: ["TAC instructions", "Number of three-address instructions. Fewer means less work."],
+  gatecount: ["Logic gates", "Number of real gate operations (AND, OR, NOT…), i.e. the hardware cost. Copies are not counted."],
+  before: ["Before", "The intermediate code straight from Phase 4."],
+  after: ["After", "The code after all optimisations. It computes exactly the same outputs."],
+  // phase 6
+  lgm: ["LGM (Logic Gate Machine)", "The simple register-based target machine we generate assembly for. Our virtual machine executes it in Phase 7."],
+  assembly: ["Assembly code", "Low-level instructions for a processor, written in readable form (LOAD, AND, STORE…)."],
+  register: ["Register", "A very fast storage slot inside the processor (R0, R1, …). Instructions compute only on registers."],
+  regalloc: ["Register allocation", "Deciding which value is kept in which register at each moment."],
+  regdesc: ["Register descriptor", "A record of what value each register currently holds."],
+  addrdesc: ["Address descriptor", "A record of where each value currently lives: in a register, in memory, or both."],
+  nextuse: ["Next-use information", "Where a value will be needed next. A value with no next use is 'dead', so its register can be reused."],
+  spill: ["Register spill", "When all registers are busy, a value is saved (STORE) to memory to free a register, and loaded back later."],
+  instructions: ["Instructions", "Total number of assembly instructions generated."],
+  isa: ["Instruction set", "All the instructions the target machine understands."],
+  "i-LOAD": ["LOAD", "Copy a value from memory into a register."],
+  "i-LOADI": ["LOADI (load immediate)", "Put a constant (0 or 1) directly into a register."],
+  "i-MOV": ["MOV", "Copy one register into another."],
+  "i-NOT": ["NOT", "Invert a register's value."],
+  "i-GATE": ["Gate instructions", "Compute a gate on two registers and put the answer in a third."],
+  "i-STORE": ["STORE", "Save a register's value into memory (for outputs, wires and spills)."],
+  "i-HALT": ["HALT", "Stop the program."],
+  // phase 7
+  vm: ["Virtual machine", "A program that acts like the LGM processor and executes the generated assembly instruction by instruction."],
+  truthtable: ["Truth table", "Shows the outputs for EVERY possible combination of inputs. n inputs give 2ⁿ rows."],
+  minterm: ["m (minterm number)", "The row number: the inputs read as a binary number. e.g. a=1, b=0, c=1 is 101₂ = 5."],
+  sop: ["Sum of minterms (Σm)", "A standard way to write a Boolean function: list the row numbers where the output is 1, e.g. `sum = Σm(1, 2, 4, 7)`."],
+  verified: ["Verification", "Each row produced by the compiled assembly is compared with the original program evaluated directly. If they all match, the compiler did not change the program's meaning."],
+  // live circuit
+  netlist: ["Netlist", "A list of gates and the wires that connect them. It is the circuit form of the optimised code."],
+  wirecolor: ["Wire colours", "A green wire carries 1. A grey wire carries 0."],
+  lamp: ["Output lamp", "Lights up green when the output is 1."],
+};
+
+/** label followed by an (i) icon that shows G[key] on hover */
+function I(key, label) {
+  const shown = label === undefined ? (G[key] ? G[key][0] : key) : label;
+  if (!G[key]) { console.warn("glossary missing:", key); return shown; }
+  return `${shown}<span class="info" tabindex="0" data-g="${esc(key)}" aria-label="What is ${esc(G[key][0])}?">i</span>`;
+}
+/** only the icon */
+const II = key => I(key, "");
+
+/* ---- tooltip ---- */
+const tip = $("#tip");
+function showTip(el) {
+  const g = G[el.dataset.g]; if (!g) return;
+  tip.innerHTML = `<b>${esc(g[0])}</b>` + esc(g[1]).replace(/`([^`]+)`/g, "<code>$1</code>");
+  tip.classList.add("show");
+  const r = el.getBoundingClientRect(), tw = tip.offsetWidth, th = tip.offsetHeight;
+  let left = Math.min(Math.max(8, r.left + r.width / 2 - tw / 2), window.innerWidth - tw - 8);
+  let top = r.bottom + 8;
+  if (top + th > window.innerHeight - 8) top = r.top - th - 8;
+  tip.style.left = left + "px"; tip.style.top = top + "px";
+}
+const hideTip = () => tip.classList.remove("show");
+document.addEventListener("mouseover", e => { const el = e.target.closest(".info"); if (el) showTip(el); });
+document.addEventListener("mouseout", e => { if (e.target.closest(".info")) hideTip(); });
+document.addEventListener("focusin", e => { if (e.target.classList && e.target.classList.contains("info")) showTip(e.target); });
+document.addEventListener("focusout", hideTip);
+document.addEventListener("click", e => {            // tap support on touch screens
+  const el = e.target.closest(".info");
+  if (el) { e.preventDefault(); e.stopPropagation(); showTip(el); } else hideTip();
+}, true);
+window.addEventListener("scroll", hideTip, true);
+
+/* decorate static elements marked data-g="key" (not the icons themselves) */
+function decorate(root) {
+  root.querySelectorAll("[data-g]:not(.info)").forEach(el => {
+    if (!el.querySelector(".info")) el.insertAdjacentHTML("beforeend", II(el.dataset.g));
+  });
+}
+
+const TABS = [
+  { n: "Phase 1", name: "Lexical Analysis", g: "lexical", render: viewLex },
+  { n: "Phase 2", name: "Syntax Analysis", g: "syntax", render: viewSyntax },
+  { n: "Phase 3", name: "Semantic Analysis", g: "semantic", render: viewSemantic },
+  { n: "Phase 4", name: "Intermediate Code", g: "icg", render: viewICG },
+  { n: "Phase 5", name: "Optimization", g: "optimization", render: viewOpt },
+  { n: "Phase 6", name: "Code Generation", g: "codegen", render: viewCodegen },
+  { n: "Phase 7", name: "Execution", g: "execution", render: viewRun },
+  { n: "Bonus", name: "Live Circuit", g: "livecircuit", render: viewCircuit, special: true },
+];
+let data = null, tab = 0, inputState = {}, timer = null, reqId = 0;
+
+/* ---------------- editor ---------------- */
+const src = $("#src"), gutter = $("#gutter");
+function updateGutter() {
+  const n = src.value.split("\n").length;
+  const bad = new Set((data ? data.diagnostics : []).filter(d => d.level === "error" && d.line).map(d => d.line));
+  let html = "";
+  for (let i = 1; i <= n; i++) html += (bad.has(i) ? `<span class="bad">${i}</span>` : i) + "\n";
+  gutter.innerHTML = html;
+  gutter.scrollTop = src.scrollTop;
+}
+src.addEventListener("scroll", () => gutter.scrollTop = src.scrollTop);
+src.addEventListener("input", () => { stopAnim(); updateGutter(); requestCompile(); });
+src.addEventListener("keydown", e => {
+  if (e.key === "Tab") { e.preventDefault(); document.execCommand("insertText", false, "    "); }
+  if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) { e.preventDefault(); compile(); }
+});
+function gotoLine(line, col) {
+  const lines = src.value.split("\n");
+  let pos = 0;
+  for (let i = 0; i < line - 1 && i < lines.length; i++) pos += lines[i].length + 1;
+  src.focus();
+  src.setSelectionRange(pos + (col ? col - 1 : 0), pos + (lines[line - 1] || "").length);
+}
+$("#hint").innerHTML =
+  `${I("gates", "Gates:")} ` + ["AND", "OR", "NOT", "XOR", "NAND", "NOR", "XNOR"].map(g => `<code>${g}</code>${II(g)}`).join(" ") +
+  ` · <code>&amp; | ! ^</code>${II("symbols")}<br>` +
+  `<code>input a, b;</code> <code>output y;</code>${II("declaration")} · <code>y = a AND b;</code>${II("assignment")}` +
+  ` · <code># comment</code>${II("comment")} · <code>Ctrl/⌘+Enter</code> compiles`;
+
+/* ---------------- compile ---------------- */
+async function compile() {
+  clearTimeout(timer);
+  setDirty(false);
+  const my = ++reqId;
+  try {
+    const r = await fetch("/api/compile", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ source: src.value, optimize: $("#optimize").checked, regs: +$("#regs").value }),
+    });
+    const d = await r.json();
+    if (my !== reqId) return;
+    if (d.error) throw new Error(d.error);
+    data = d;
+    for (const i of d.inputs) if (!(i in inputState)) inputState[i] = 0;
+  } catch (e) {
+    data = null;
+    $("#view").innerHTML = `<div class="blocked"><b>Could not reach the compiler server.</b><br>${esc(e.message)}<br><br>Start it with <code>python3 -m logicc.web</code></div>`;
+    return;
+  }
+  updateGutter(); renderDiags(); renderPipeline(); renderView();
+}
+
+function renderDiags() {
+  const box = $("#diags");
+  const ds = data.diagnostics;
+  if (!ds.length) { box.innerHTML = `<div class="allgood">✔ No errors, no warnings ${II("errorhandler")}</div>`; return; }
+  const ne = ds.filter(d => d.level === "error").length, nw = ds.filter(d => d.level === "warning").length;
+  box.innerHTML = `<h3>${I("errorhandler", "Error handler")} — ${ne} error(s), ${nw} warning(s)</h3>` + ds.map((d, i) =>
+    `<div class="diag ${d.level}" data-i="${i}"><span class="tag">${d.level}</span>${II(d.level)}
+     <span class="where">[${esc(d.phase)}]${d.line ? ` line ${d.line}${d.col ? ":" + d.col : ""}` : ""}</span><br>${esc(d.message)}</div>`).join("");
+  box.querySelectorAll(".diag").forEach(el => el.onclick = e => {
+    if (e.target.closest(".info")) return;
+    const d = ds[+el.dataset.i]; if (d.line) gotoLine(d.line, d.col);
+  });
+}
+
+function renderPipeline() {
+  $("#pipeline").innerHTML = TABS.map((t, i) => {
+    const st = i < 7 ? (data ? data.phases[i].status : "skipped") : (data && data.optimized_quads ? "ok" : "skipped");
+    return `<button class="step ${st} ${i === tab ? "active" : ""} ${t.special ? "special" : ""}" data-i="${i}">
+      <span class="dot"></span><div class="n">${t.n}</div><div class="nm">${I(t.g, t.name)}</div></button>`;
+  }).join("");
+  $("#pipeline").querySelectorAll(".step").forEach(b => b.onclick = e => {
+    if (e.target.closest(".info")) return;
+    setTab(+b.dataset.i);
+  });
+}
+function setTab(i, fromAnim) {
+  if (!fromAnim) stopAnim();
+  tab = Math.max(0, Math.min(TABS.length - 1, i)); hideTip(); renderPipeline(); renderView();
+}
+$("#prev").onclick = () => setTab(tab - 1);
+$("#next").onclick = () => setTab(tab + 1);
+document.addEventListener("keydown", e => {
+  if (document.activeElement === src || e.target.tagName === "SELECT") return;
+  if (e.key === "ArrowRight") setTab(tab + 1);
+  if (e.key === "ArrowLeft") setTab(tab - 1);
+});
+
+function renderView() {
+  if (!data) return;
+  const t = TABS[tab];
+  $("#view").innerHTML = t.render(data);
+  $("#navinfo").textContent = `${t.n}: ${t.name}  (${tab + 1}/${TABS.length})`;
+  if (t === TABS[7]) bindCircuit();
+  if (t === TABS[1]) drawAst();
+  if (anim.on) prepareAnim();
+}
+
+function blocked(d) {
+  const failed = d.phases.findIndex(p => p.status === "error");
+  return `<div class="blocked">This phase was <b>not reached</b> because compilation stopped at
+    <b>Phase ${failed + 1}: ${esc(d.phases[failed].name)}</b>.<br><br>
+    Fix the errors listed under the editor (click an error to jump to its line).</div>`;
+}
+const head = (title, key, desc) => `<h2>${I(key, title)}</h2><p class="desc">${desc}</p>`;
+
+/* ---------------- Phase 1 ---------------- */
+function viewLex(d) {
+  let h = head("Phase 1 · Lexical Analysis", "lexical",
+    `The ${I("scanner", "<b>scanner</b>")} reads the program character by character and groups the characters into ${I("token", "<b>tokens</b>")}. ` +
+    `Each token has a ${I("lexeme", "lexeme")} (the actual text) and a type. Whitespace and ${I("comment", "comments")} are discarded. ` +
+    `Illegal characters (like <code>$</code>) or constants other than 0/1 are lexical ${I("error", "errors")}.`);
+  h += `<h3>${I("tokentypes", "Token types")}</h3><div class="legend-row">
+    <span class="chip t-INPUT">INPUT / OUTPUT</span>${II("tt-KEYWORD")}
+    <span class="chip t-IDENT">IDENT</span>${II("tt-IDENT")}
+    <span class="chip t-CONST">CONST</span>${II("tt-CONST")}
+    <span class="chip t-OP">OP</span>${II("tt-OP")}
+    <span class="chip t-ASSIGN">ASSIGN</span>${II("tt-ASSIGN")}
+    <span class="chip t-SEMI">SEMI COMMA LPAREN RPAREN</span>${II("tt-PUNCT")}</div>`;
+  h += `<h3>${I("tokenstream", `Token stream (${d.tokens.length} tokens)`)}</h3><div>` +
+    d.tokens.map((t, i) => `<span data-step="${i}" class="chip t-${t.type}">${esc(t.lexeme)}<small>${t.type}</small></span>`).join("") + `</div>`;
+  h += `<h3>${I("tokentable", "Token table")}</h3><table class="grid"><tr><th>#</th><th>${I("lexeme", "Lexeme")}</th><th>${I("token", "Token")}</th><th>${I("attribute", "Attribute")}</th><th>${I("linecol", "Line:Col")}</th></tr>` +
+    d.tokens.map((t, i) => `<tr data-step="${i}"><td>${i + 1}</td><td class="mono">${esc(t.lexeme)}</td><td>${t.type}</td><td class="mono">${esc(t.attr)}</td><td>${t.line}:${t.col}</td></tr>`).join("") + `</table>`;
+  return h;
+}
+
+/* ---------------- Phase 2 ---------------- */
+function viewSyntax(d) {
+  let h = head("Phase 2 · Syntax Analysis", "syntax",
+    `A ${I("recursive", "<b>recursive-descent</b>")} ${I("ll1", "<b>LL(1)</b>")} ${I("parser", "parser")} checks the tokens against the ${I("grammar", "grammar")} and builds an ${I("ast", "<b>Abstract Syntax Tree</b>")}. ` +
+    `${I("precedence", "Precedence")}: NOT &gt; AND/NAND &gt; XOR/XNOR &gt; OR/NOR, all ${I("associativity", "left-associative")}. ` +
+    `On an error it uses ${I("panic", "<b>panic-mode recovery</b>")} (skip to <code>;</code>) and keeps parsing.`);
+  if (d.phases[1].status === "error" || !d.ast) return h + blocked(d);
+  h += `<h3>${I("ast", "Abstract syntax tree")}</h3>
+    <div class="legend-row">Node types:
+      <span style="color:#4f46e5;font-weight:600">Program</span>${II("ast-Program")}
+      <span style="color:#9333ea;font-weight:600">Declaration</span>${II("ast-Declaration")}
+      <span style="color:#0369a1;font-weight:600">Assignment</span>${II("ast-Assign")}
+      <span style="color:#b45309;font-weight:600">Gate</span>${II("ast-Gate")}
+      <span style="color:#0f766e;font-weight:600">Variable</span>${II("ast-Var")}
+      <span style="color:#15803d;font-weight:600">Constant</span>${II("ast-Const")}</div>
+    <div class="svgwrap" id="astwrap"></div>`;
+  h += `<h3>${I("grammar", "Grammar")}&nbsp;(${I("ebnf", "EBNF")})&nbsp; <span style="text-transform:none;font-weight:400;color:var(--muted)">${I("leftrec", "left recursion removed")}</span></h3><pre class="code">program     → statement* EOF
+statement   → declaration | assignment
+declaration → ("input" | "output") IDENT ("," IDENT)* ";"
+assignment  → IDENT "=" expr ";"
+expr        → or_expr
+or_expr     → xor_expr (("OR" | "NOR") xor_expr)*
+xor_expr    → and_expr (("XOR" | "XNOR") and_expr)*
+and_expr    → unary (("AND" | "NAND") unary)*
+unary       → "NOT" unary | primary
+primary     → IDENT | CONST | "(" expr ")"</pre>`;
+  return h;
+}
+function drawAst() {
+  const wrap = $("#astwrap"); if (!wrap || !data.ast) return;
+  const LW = 64, LH = 64, nodes = [], edges = [];
+  let cursor = 0;
+  (function lay(n, depth) {
+    const label = n.label.replace(/^Gate /, "").replace(/^Var /, "").replace(/^Const /, "")
+      .replace(/^Declaration \[(\w+)\]: /, "$1 ").replace(/^Assign\s+/, "");
+    const me = { label, depth, kind: n.label.split(" ")[0] };
+    me.w = Math.max(34, label.length * 7.6 + 16);
+    nodes.push(me);
+    if (!n.children.length) { me.x = cursor + Math.max(LW, me.w + 12) / 2; cursor += Math.max(LW, me.w + 12); }
+    else {
+      const kids = n.children.map(c => lay(c, depth + 1));
+      kids.forEach(k => edges.push([me, k]));
+      me.x = (kids[0].x + kids[kids.length - 1].x) / 2;
+    }
+    return me;
+  })(data.ast, 0);
+  const maxD = Math.max(...nodes.map(n => n.depth));
+  const W = Math.max(cursor, 300) + 40, H = (maxD + 1) * LH + 30;
+  const color = { Program: "#4f46e5", Declaration: "#9333ea", Assign: "#0369a1", Gate: "#b45309", Var: "#0f766e", Const: "#15803d" };
+  let s = `<svg width="${W}" height="${H}">`;
+  const X = n => n.x + 20, Y = n => n.depth * LH + 26;
+  for (const [a, b] of edges) s += `<line data-step="${b.depth}" x1="${X(a)}" y1="${Y(a) + 13}" x2="${X(b)}" y2="${Y(b) - 13}" stroke="#c3c9d8" stroke-width="1.5"/>`;
+  for (const n of nodes) {
+    const c = color[n.kind] || "#475569";
+    s += `<g data-step="${n.depth}"><rect x="${X(n) - n.w / 2}" y="${Y(n) - 13}" width="${n.w}" height="26" rx="7" fill="#fff" stroke="${c}" stroke-width="1.8"/>
+          <text x="${X(n)}" y="${Y(n) + 4.5}" text-anchor="middle" font-size="12" fill="${c}" font-weight="600">${esc(n.label)}</text></g>`;
+  }
+  wrap.innerHTML = s + `</svg>`;
+}
+
+/* ---------------- Phase 3 ---------------- */
+function viewSemantic(d) {
+  let h = head("Phase 3 · Semantic Analysis", "semantic",
+    `Checks the <b>meaning</b> of the program and fills the ${I("symtab", "<b>symbol table</b>")}. In a logic circuit every signal must be defined before use, ` +
+    `have exactly one ${I("driver", "driver")}, ${I("input", "inputs")} cannot be assigned, ${I("output", "outputs")} must be assigned, ` +
+    `and no signal may depend on itself (${I("loop", "combinational loop")}).`);
+  if (!d.symtab) return h + blocked(d);
+  h += `<div class="cols"><div><h3>${I("symtab", "Symbol table")}</h3><table class="grid"><tr><th>#</th><th>Name</th><th>${I("kind", "Kind")}</th><th>${I("type", "Type")}</th><th>${I("declared", "Declared @")}</th><th>${I("assigned", "Assigned @")}</th><th>${I("uses", "Uses")}</th></tr>` +
+    d.symtab.map((s, i) => `<tr data-step="${i}"><td>${i + 1}</td><td class="mono"><b>${esc(s.name)}</b></td><td>${esc(s.kind)}</td><td>${s.type}</td><td>${s.declared}</td><td>${s.assigned ?? "–"}</td><td>${s.uses}</td></tr>`).join("") + `</table>
+    <div class="legend-row">Kinds: ${I("input", "input")} ${I("output", "output")} ${I("wire", "wire")} ${I("implicit", "(implicit)")}</div>
+    <p>${I("input", "<b>Inputs:</b>")} <span class="mono">${esc(d.inputs.join(", ") || "–")}</span> &nbsp; ${I("output", "<b>Outputs:</b>")} <span class="mono">${esc(d.outputs.join(", ") || "–")}</span></p></div>`;
+  const status = d.phases[2].status === "error"
+    ? `<span class="badge err">✘ Semantic errors found. See the error panel</span>`
+    : `<span class="badge ok">✔ All semantic checks passed</span>`;
+  const n0 = d.symtab.length;
+  const checks = ["No name declared twice", `No name is both ${I("input", "input")} and ${I("output", "output")}`, "Inputs are never assigned",
+    `Every signal has exactly one ${I("driver", "driver")}`, "Signals are defined before use", `No ${I("loop", "combinational loops")}`,
+    "Every output is assigned", `${I("warning", "Warn")} on unused inputs / dead ${I("wire", "wires")}`];
+  h += `<div><h3>${I("checks", "Checks performed")}</h3><ul class="checks${d.phases[2].status === "error" ? " failed" : ""}">` +
+    checks.map((c, j) => `<li data-step="${n0 + j}">${c}</li>`).join("") +
+    `</ul><div data-step="${n0 + checks.length}">${status}</div></div></div>`;
+  return h;
+}
+
+/* ---------------- Phase 4 ---------------- */
+function tacHtml(lines, temps, stepped) {
+  const tset = new Set(temps || []);
+  return `<pre class="code">` + lines.map((l, i) => (stepped ? `<span data-step="${i}">` : "<span>") + `<span class="ln">${String(i).padStart(3)}:</span>  ` +
+    esc(l).replace(/\b(AND|OR|NOT|XOR|NAND|NOR|XNOR)\b/g, '<span class="op">$1</span>')
+          .replace(/\b(t\d+)\b/g, m => tset.has(m) ? `<span class="tmp">${m}</span>` : m) + "</span>").join("\n") + `</pre>`;
+}
+const quadHead = `<th>#</th><th>${I("op", "op")}</th><th>${I("arg1", "arg1")}</th><th>${I("arg2", "arg2")}</th>`;
+function viewICG(d) {
+  let h = head("Phase 4 · Intermediate Code Generation", "icg",
+    `The ${I("ast", "AST")} is translated into ${I("tac", "<b>three-address code</b>")} (at most one operator per instruction). Each gate gets a new ` +
+    `${I("temporary", "<b>temporary</b>")} (<span class="mono">t1, t2…</span>). The same code is also shown as ${I("quadruples", "<b>quadruples</b>")} and ${I("triples", "<b>triples</b>")}.`);
+  if (!d.tac) return h + blocked(d);
+  h += `<div class="cols"><div><h3>${I("tac", "Three-address code")}</h3>${tacHtml(d.tac, d.temps, true)}
+        <div class="legend-row"><span style="color:#7c3aed;font-family:var(--mono)">t1</span>${I("temporary", "= temporary")}</div></div>`;
+  h += `<div><h3>${I("quadruples", "Quadruples")}</h3><table class="grid"><tr>${quadHead}<th>${I("result", "result")}</th></tr>` +
+    d.quads.map((q, i) => `<tr data-step="${i}"><td>${i}</td><td class="mono">${q[0] === "COPY" ? "=" : q[0]}</td><td class="mono">${esc(q[1])}</td><td class="mono">${esc(q[2])}</td><td class="mono">${esc(q[3])}</td></tr>`).join("") + `</table></div>`;
+  h += `<div><h3>${I("triples", "Triples")}</h3><table class="grid"><tr>${quadHead}</tr>` +
+    d.triples.map((r, i) => `<tr data-step="${i}">${r.map(c => `<td class="mono">${esc(c)}</td>`).join("")}</tr>`).join("") + `</table></div></div>`;
+  return h;
+}
+
+/* ---------------- Phase 5 ---------------- */
+function viewOpt(d) {
+  const passes = ["Constant folding", "Algebraic simplification", "Double negation", "Common subexpression elimination",
+                  "Copy propagation", "Constant propagation", "Copy coalescing", "Dead code elimination"];
+  let h = head("Phase 5 · Code Optimization", "optimization",
+    `Machine-independent optimisations on the ${I("tac", "TAC")}, repeated in ${I("round", "rounds")} until nothing changes. Passes: ` +
+    passes.map(p => I(p, `<b>${p.toLowerCase()}</b>`)).join(", ") + ".");
+  if (!d.optimized) return h + blocked(d);
+  const m = d.metrics;
+  const pct = (a, b) => a ? Math.round(100 * (a - b) / a) : 0;
+  const nl = d.opt_log.length;
+  h += `<div data-step="${nl}"><div class="metric"><span class="lbl">${I("tacinstr", "TAC instructions")}</span><span class="big">${m.tac_before} → ${m.tac_after}</span><span class="down">${pct(m.tac_before, m.tac_after)}% fewer</span></div>` +
+       `<div class="metric"><span class="lbl">${I("gatecount", "Logic gates")}</span><span class="big">${m.gates_before} → ${m.gates_after}</span><span class="down">${pct(m.gates_before, m.gates_after)}% fewer</span></div></div>`;
+  if (!d.optimize) h += `<p class="desc"><b>The optimiser is switched off.</b> Tick “Optimise” above to turn it on.</p>`;
+  h += `<div class="cols"><div><h3>${I("before", "Before")}</h3>${tacHtml(d.tac, d.temps)}</div><div data-step="${nl}"><h3>${I("after", "After")}</h3>${tacHtml(d.optimized, d.temps)}</div></div>`;
+  if (d.opt_log.length) {
+    h += `<h3>Optimisations applied (${d.opt_log.length})</h3><div class="log">` + d.opt_log.map((l, i) =>
+      `<div class="row" data-step="${i}"><span>${I("round", `round ${l.round}`)}</span><span class="pass">${G[l.pass] ? I(l.pass, esc(l.pass)) : esc(l.pass)}</span><span class="msg">${esc(l.message)}</span></div>`).join("") + `</div>`;
+  } else if (d.optimize) h += `<p class="desc">No optimisation opportunities found.</p>`;
+  return h;
+}
+
+/* ---------------- Phase 6 ---------------- */
+function viewCodegen(d) {
+  let h = head("Phase 6 · Target Code Generation", "codegen",
+    `Optimised TAC is translated into ${I("assembly", "assembly")} for ${I("lgm", "<b>LGM</b>")} (Logic Gate Machine), a machine with <b>${d.regs}</b> ${I("register", "registers")}. ` +
+    `${I("regalloc", "Register allocation")} uses a ${I("regdesc", "<b>register descriptor</b>")}, an ${I("addrdesc", "<b>address descriptor</b>")} and ${I("nextuse", "<b>next-use</b>")} information. ` +
+    `When registers run out, the value needed farthest in the future is ${I("spill", "<b>spilled</b>")} to memory. Choose 3 registers to see spills.`);
+  if (!d.asm) return h + blocked(d);
+  h += `<div><div class="metric"><span class="lbl">${I("instructions", "Instructions")}</span><span class="big">${d.asm.length}</span></div>` +
+       `<div class="metric"><span class="lbl">${I("registers", "Registers")}</span><span class="big">${d.regs}</span></div>` +
+       `<div class="metric"><span class="lbl">${I("spill", "Register spills")}</span><span class="big">${d.spills}</span></div></div>`;
+  h += `<div class="cols"><div><h3>${I("assembly", "Assembly")}</h3><pre class="code">` + d.asm.map((ins, i) => {
+    let line = `<span data-step="${i}"><span class="ln">${String(i).padStart(3)}</span>  <span class="k">${ins.op.padEnd(6)}</span> ` +
+      ins.args.map(a => /^R\d+$/.test(a) ? `<span class="reg">${a}</span>` : esc(a)).join(", ");
+    const raw = ins.op.padEnd(6) + " " + ins.args.join(", ");
+    if (ins.comment) line += " ".repeat(Math.max(2, 24 - raw.length)) + `<span class="cm">; ${esc(ins.comment)}</span>`;
+    return line + "</span>";
+  }).join("\n") + `</pre></div>`;
+  const row = (k, ins, meaning) => `<tr><td class="mono">${ins}${II(k)}</td><td>${meaning}</td></tr>`;
+  h += `<div><h3>${I("isa", "Instruction set")}</h3><table class="grid">
+    <tr><th>Instruction</th><th>Meaning</th></tr>
+    ${row("i-LOAD", "LOAD Rd, x", "Rd ← memory[x]")}
+    ${row("i-LOADI", "LOADI Rd, c", "Rd ← constant 0/1")}
+    ${row("i-MOV", "MOV Rd, Rs", "Rd ← Rs")}
+    ${row("i-NOT", "NOT Rd, Rs", "Rd ← NOT Rs")}
+    ${row("i-GATE", "AND Rd, Ra, Rb", "Rd ← Ra AND Rb (also OR, XOR, NAND, NOR, XNOR)")}
+    ${row("i-STORE", "STORE x, Rs", "memory[x] ← Rs")}
+    ${row("i-HALT", "HALT", "stop")}</table>
+    <div class="legend-row"><span class="mono" style="color:#0284c7">R0 R1…</span>${I("register", "= registers")}</div></div></div>`;
+  return h;
+}
+
+/* ---------------- Phase 7 ---------------- */
+function currentRow(d) {
+  return d.inputs.reduce((acc, name) => acc * 2 + (inputState[name] || 0), 0);
+}
+function viewRun(d) {
+  let h = head("Phase 7 · Execution & Verification", "execution",
+    `The generated assembly runs on a ${I("vm", "<b>virtual machine</b>")} for all 2<sup>n</sup> input combinations, producing the ${I("truthtable", "<b>truth table</b>")}. ` +
+    `Every row is ${I("verified", "checked")} against a direct evaluation of the original source. This shows that the ICG, optimiser and code generator did not change the result.`);
+  if (!d.asm) return h + blocked(d);
+  if (!d.truth) return h + `<div class="blocked">Too many inputs (${d.inputs.length}) to print a truth table.</div>`;
+  const t = d.truth;
+  h += `<div data-step="${t.rows.length}" style="display:inline-block">` + (t.verified
+    ? `<span class="badge ok">✔ Verified: compiled code matches the source program on all ${t.rows.length} input combinations${II("verified")}</span>`
+    : `<span class="badge err">✘ Verification failed on ${t.mismatches} row(s)${II("verified")}</span>`) + `</div>`;
+  const cur = currentRow(d);
+  h += `<div class="cols"><div><h3>${I("truthtable", "Truth table")}</h3><table class="grid"><tr><th>${I("minterm", "m")}</th>${d.inputs.map(i => `<th class="mono">${esc(i)}</th>`).join("")}<th style="background:#e9ebf3"></th>${d.outputs.map(o => `<th class="mono" style="color:var(--accent)">${esc(o)}</th>`).join("")}</tr>` +
+    t.rows.map(([ins, outs], i) => `<tr data-step="${i}" class="${i === cur ? "hl" : ""}"><td>${i}</td>${ins.map(v => `<td>${v}</td>`).join("")}<td style="background:#f6f7fb"></td>${outs.map(v => `<td><b style="color:${v ? "var(--ok)" : "var(--lo)"}">${v}</b></td>`).join("")}</tr>`).join("") + `</table>
+    <div class="legend-row">${I("input", "inputs")} on the left, ${I("output", "outputs")} on the right</div></div>`;
+  h += `<div data-step="${t.rows.length}"><h3>${I("sop", "Canonical form (sum of minterms)")}</h3><pre class="code">` +
+    Object.entries(t.minterms).map(([o, ms]) => `${esc(o)} = Σm(${ms.join(", ")})`).join("\n") + `</pre>
+    <p class="desc" style="margin-top:12px">The highlighted row is the input combination currently set in the <b>Live Circuit</b> tab.</p></div></div>`;
+  return h;
+}
+
+/* ---------------- Live circuit ---------------- */
+const BUBBLE = new Set(["NAND", "NOR", "XNOR"]);
+function gatePath(op) {
+  const base = op.replace(/^N(AND|OR)$/, "$1").replace("XNOR", "XOR");
+  if (op === "NOT") return `<path d="M0,-18 L36,0 L0,18 Z"/><circle cx="41" cy="0" r="5"/>`;
+  let p = base === "AND" ? `<path d="M0,-20 H26 A20,20 0 0 1 26,20 H0 Z"/>`
+                         : `<path d="M0,-20 Q12,0 0,20 Q30,20 46,0 Q30,-20 0,-20 Z"/>`;
+  if (base === "XOR") p += `<path d="M-7,-20 Q5,0 -7,20" fill="none"/>`;
+  if (BUBBLE.has(op)) p += `<circle cx="51" cy="0" r="5"/>`;
+  return p;
+}
+const outPinX = op => op === "NOT" ? 46 : BUBBLE.has(op) ? 56 : 46;
+function evalGate(op, a, b) {
+  switch (op) {
+    case "AND": return a & b; case "OR": return a | b; case "XOR": return a ^ b;
+    case "NAND": return 1 - (a & b); case "NOR": return 1 - (a | b); case "XNOR": return 1 - (a ^ b);
+    case "NOT": return 1 - a;
+  }
+}
+function buildCircuit(d) {
+  const nodes = [], srcOf = {};
+  for (const i of d.inputs) { const n = { kind: "input", name: i, col: 0, ins: [] }; nodes.push(n); srcOf[i] = n; }
+  const nodeOf = x => {
+    if (x === 0 || x === 1) { const n = { kind: "const", value: x, col: 0, ins: [] }; nodes.push(n); return n; }
+    return srcOf[x];
+  };
+  for (const [op, a1, a2, res] of d.optimized_quads) {
+    if (op === "COPY") { srcOf[res] = nodeOf(a1); continue; }
+    const ins = (op === "NOT" ? [a1] : [a1, a2]).map(nodeOf);
+    const n = { kind: "gate", op, name: res, ins, col: 1 + Math.max(...ins.map(x => x.col)) };
+    nodes.push(n); srcOf[res] = n;
+  }
+  const maxCol = Math.max(0, ...nodes.map(n => n.col));
+  for (const o of d.outputs) nodes.push({ kind: "output", name: o, ins: [srcOf[o]], col: maxCol + 1 });
+  for (const n of nodes) {
+    if (n.kind === "input") n.v = inputState[n.name] || 0;
+    else if (n.kind === "const") n.v = n.value;
+    else if (n.kind === "gate") n.v = evalGate(n.op, n.ins[0].v, n.ins[1] ? n.ins[1].v : 0);
+    else n.v = n.ins[0].v;
+  }
+  const cols = [];
+  for (const n of nodes) (cols[n.col] = cols[n.col] || []).push(n);
+  const RH = 78;
+  const maxRows = Math.max(...Array.from(cols, c => c ? c.length : 0));
+  const avgY = n => n.ins.reduce((s, x) => s + x.y, 0) / Math.max(1, n.ins.length);
+  cols.forEach((c, ci) => {
+    if (!c) return;
+    if (ci > 0) c.sort((a, b) => avgY(a) - avgY(b));
+    const off = (maxRows - c.length) * RH / 2;
+    c.forEach((n, k) => { n.y = 40 + off + k * RH; n.x = 30 + ci * 160; });
+  });
+  return { nodes, W: 30 + (maxCol + 1) * 160 + 140, H: 40 + maxRows * RH };
+}
+function outPin(n) {
+  if (n.kind === "input") return [n.x + 58, n.y];
+  if (n.kind === "const") return [n.x + 30, n.y];
+  return [n.x + outPinX(n.op), n.y];
+}
+function inPins(n) {
+  if (n.kind === "input" || n.kind === "const") return [];
+  if (n.kind === "output" || n.op === "NOT") return [[n.x, n.y]];
+  const dx = (n.op.includes("OR") ? 4 : 0) - (n.op.includes("XOR") || n.op === "XNOR" ? 7 : 0);
+  return [[n.x + dx, n.y - 10], [n.x + dx, n.y + 10]];
+}
+function viewCircuit(d) {
+  let h = head("Live Circuit (optimised netlist)", "livecircuit",
+    `The optimised ${I("tac", "three-address code")} drawn as a gate-level circuit (a ${I("netlist", "netlist")}). <b>Click an input</b> to switch it between 0 and 1. ` +
+    `Wires carrying <b style="color:var(--hi)">1</b> turn green and the ${I("lamp", "output lamps")} update immediately. ` +
+    `The current row is highlighted in the Phase 7 ${I("truthtable", "truth table")}.`);
+  if (!d.optimized_quads) return h + blocked(d);
+  const C = buildCircuit(d);
+  let s = `<svg id="circ" width="${C.W}" height="${C.H}">`;
+  for (const n of C.nodes) {
+    inPins(n).forEach(([x2, y2], k) => {
+      const srcN = n.ins[k]; if (!srcN) return;
+      const [x1, y1] = outPin(srcN), mx = (x1 + x2) / 2;
+      s += `<path d="M${x1},${y1} C${mx},${y1} ${mx},${y2} ${x2},${y2}" fill="none" stroke="${srcN.v ? "var(--hi)" : "var(--lo)"}" stroke-width="${srcN.v ? 3 : 2}"/>`;
+    });
+  }
+  for (const n of C.nodes) {
+    if (n.kind === "input") {
+      s += `<g class="clickable" data-in="${esc(n.name)}"><title>Click to toggle ${esc(n.name)}</title><rect x="${n.x}" y="${n.y - 17}" width="58" height="34" rx="8"
+        fill="${n.v ? "#dcfce7" : "#f1f5f9"}" stroke="${n.v ? "var(--hi)" : "#94a3b8"}" stroke-width="2"/>
+        <text x="${n.x + 22}" y="${n.y + 5}" text-anchor="middle" font-size="14" font-weight="700">${esc(n.name)}</text>
+        <text x="${n.x + 47}" y="${n.y + 5}" text-anchor="middle" font-size="14" font-weight="800" fill="${n.v ? "var(--hi)" : "#64748b"}">${n.v}</text></g>`;
+    } else if (n.kind === "const") {
+      s += `<rect x="${n.x}" y="${n.y - 13}" width="30" height="26" rx="5" fill="#fff" stroke="#94a3b8"/>
+        <text x="${n.x + 15}" y="${n.y + 5}" text-anchor="middle" font-size="13" font-weight="700">${n.value}</text>`;
+    } else if (n.kind === "gate") {
+      s += `<g><title>${esc(G[n.op][0])}: ${esc(G[n.op][1])}</title><g transform="translate(${n.x},${n.y})" fill="${n.v ? "#ecfdf3" : "#fff"}" stroke="${n.v ? "var(--hi)" : "#475569"}" stroke-width="2">${gatePath(n.op)}</g>
+        <text x="${n.x + 22}" y="${n.y + 36}" text-anchor="middle" font-size="11" fill="#475569" font-weight="700">${n.op}</text></g>`;
+    } else {
+      s += `<circle cx="${n.x + 16}" cy="${n.y}" r="15" fill="${n.v ? "#22c55e" : "#e2e8f0"}" stroke="${n.v ? "#15803d" : "#94a3b8"}" stroke-width="2"/>
+        <text x="${n.x + 16}" y="${n.y + 5}" text-anchor="middle" font-size="13" font-weight="800" fill="${n.v ? "#fff" : "#64748b"}">${n.v}</text>
+        <text x="${n.x + 38}" y="${n.y + 5}" font-size="15" font-weight="700">${esc(n.name)}</text>`;
+    }
+  }
+  s += `</svg>`;
+  const used = [...new Set(d.optimized_quads.map(q => q[0]).filter(o => o !== "COPY"))];
+  const row = d.inputs.length ? currentRow(d) : 0;
+  h += `<div class="legend">${I("wirecolor", "Wire:")} <span class="sw" style="background:var(--hi)"></span>1 <span class="sw" style="background:var(--lo)"></span>0
+        &nbsp;·&nbsp; ${I("input", "Inputs:")} ${d.inputs.map(i => `<b class="mono">${esc(i)}=${inputState[i] || 0}</b>`).join(" ") || "none"}
+        &nbsp;·&nbsp; ${I("minterm", `truth-table row m${row}`)}
+        &nbsp; <button class="btn ghost" id="stepRow">Next input combination ▶</button></div>`;
+  if (used.length) h += `<div class="legend">${I("gates", "Gates used:")} ${used.map(o => I(o, `<b>${o}</b>`)).join(" &nbsp; ")}</div>`;
+  h += `<div class="svgwrap">${s}</div>`;
+  return h;
+}
+function bindCircuit() {
+  document.querySelectorAll("#circ [data-in]").forEach(g => g.onclick = () => {
+    inputState[g.dataset.in] = 1 - (inputState[g.dataset.in] || 0); renderView();
+  });
+  const b = $("#stepRow");
+  if (b) b.onclick = () => {
+    const n = data.inputs.length; if (!n) return;
+    const next = (currentRow(data) + 1) % (1 << n);
+    data.inputs.forEach((name, i) => inputState[name] = (next >> (n - 1 - i)) & 1);
+    renderView();
+  };
+}
+
+/* =====================================================================
+   STEP-BY-STEP ANIMATION
+   Plays every phase in order. Inside a phase, elements tagged
+   data-step="k" are revealed in order k = 0, 1, 2 ...  The Live Circuit
+   tab instead cycles through the input combinations.
+   ===================================================================== */
+const CAPTIONS = [
+  "Scanning the source: characters → tokens, one token at a time",
+  "Parsing: building the syntax tree level by level",
+  "Semantic analysis: entering each name into the symbol table, then running the checks",
+  "Generating three-address code: one instruction per gate (same row in quadruples & triples)",
+  "Optimising: applying one transformation at a time",
+  "Code generation: emitting assembly instruction by instruction",
+  "Executing on the virtual machine: one input combination per row",
+  "Live circuit: trying every input combination",
+];
+const anim = { on: false, paused: false, timer: null, step: -1, max: -1, els: [], combos: 0 };
+const speed = () => +$("#speed").value;
+const later = (fn, ms) => { clearTimeout(anim.timer); anim.timer = setTimeout(fn, ms / speed()); };
+
+function updateAnimButtons() {
+  $("#play").textContent = !anim.on ? "▶ Step-by-step" : anim.paused ? "▶ Resume" : "⏸ Pause";
+  $("#stopAnim").hidden = !anim.on;
+}
+async function startAnim() {
+  if (dirty) await compile();
+  if (!data) return;
+  anim.on = true; anim.paused = false;
+  inputState = {}; data.inputs.forEach(i => inputState[i] = 0);
+  updateAnimButtons();
+  setTab(0, true);
+}
+function stopAnim() {
+  if (!anim.on) return;
+  clearTimeout(anim.timer);
+  anim.on = false; anim.paused = false;
+  document.querySelectorAll(".step-hidden").forEach(e => e.classList.remove("step-hidden"));
+  document.querySelectorAll(".step-new").forEach(e => e.classList.remove("step-new"));
+  const cap = $("#animcap"); if (cap) cap.remove();
+  updateAnimButtons();
+}
+$("#play").onclick = () => {
+  if (!anim.on) return startAnim();
+  anim.paused = !anim.paused;
+  updateAnimButtons();
+  if (!anim.paused) tick(); else clearTimeout(anim.timer);
+};
+$("#stopAnim").onclick = stopAnim;
+
+function caption(done, total) {
+  let cap = $("#animcap");
+  if (!cap) {
+    $("#view").insertAdjacentHTML("afterbegin", `<div id="animcap"><span class="pulse"></span><span id="capt"></span><span class="bar"><i></i></span><span id="capn"></span></div>`);
+    cap = $("#animcap");
+  }
+  $("#capt").textContent = `${TABS[tab].n}: ${CAPTIONS[tab]}`;
+  $("#capn").textContent = total > 0 ? `${Math.max(0, done)}/${total}` : "";
+  cap.querySelector(".bar i").style.width = total > 0 ? (100 * Math.max(0, done) / total) + "%" : "100%";
+}
+
+function prepareAnim() {
+  anim.step = -1;
+  if (tab === 7) {                                   // live circuit: cycle input combinations
+    anim.combos = Math.min(1 << data.inputs.length, 16);
+    anim.max = anim.combos - 1; anim.els = [];
+  } else {
+    anim.els = [...$("#view").querySelectorAll("[data-step]")];
+    anim.els.forEach(e => e.classList.add("step-hidden"));
+    anim.max = anim.els.reduce((m, e) => Math.max(m, +e.dataset.step), -1);
+  }
+  caption(0, anim.max + 1);
+  $("#view").scrollTop = 0;
+  if (!anim.paused) later(tick, 1400);               // give time to read the phase description
+}
+
+function stepDelay() {
+  const n = anim.max + 1;
+  if (tab === 7) return 1100;
+  return Math.max(160, Math.min(900, 7000 / Math.max(1, n)));
+}
+
+function tick() {
+  if (!anim.on || anim.paused) return;
+  anim.step++;
+  if (anim.step > anim.max) return finishPhase();
+  if (tab === 7) {
+    const n = data.inputs.length, k = anim.step;
+    data.inputs.forEach((name, i) => inputState[name] = (k >> (n - 1 - i)) & 1);
+    $("#view").innerHTML = viewCircuit(data);
+    bindCircuit();
+  } else {
+    document.querySelectorAll(".step-new").forEach(e => e.classList.remove("step-new"));
+    const now = anim.els.filter(e => +e.dataset.step === anim.step);
+    now.forEach(e => { e.classList.remove("step-hidden"); e.classList.add("step-new"); });
+    if (now[0] && now[0].scrollIntoView) now[0].scrollIntoView({ block: "nearest", behavior: "smooth" });
+  }
+  caption(anim.step + 1, anim.max + 1);
+  later(tick, stepDelay());
+}
+
+function finishPhase() {
+  document.querySelectorAll(".step-new").forEach(e => e.classList.remove("step-new"));
+  const st = tab < 7 ? data.phases[tab].status : "ok";
+  if (st !== "ok" || tab === TABS.length - 1) {     // stop at an error, or at the very end
+    later(() => {
+      stopAnim();
+      if (st === "error") $("#view").insertAdjacentHTML("afterbegin",
+        `<div class="badge err" style="margin-bottom:12px">Compilation stopped in this phase. See the errors under the editor.</div>`);
+    }, 900);
+    return;
+  }
+  later(() => { if (anim.on && !anim.paused) setTab(tab + 1, true); }, 1500);
+}
+
+/* ---------------- boot ---------------- */
+decorate(document);
+/* ---- auto-compile vs. manual Compile button ---- */
+const autoBox = $("#auto");
+let dirty = false;
+function setDirty(v) {
+  dirty = v;
+  const b = $("#compile");
+  b.classList.toggle("pending", v);
+  b.textContent = v ? "▶ Compile (changed)" : "▶ Compile";
+}
+function requestCompile() {
+  if (autoBox.checked) { clearTimeout(timer); timer = setTimeout(compile, 450); }
+  else setDirty(true);
+}
+function syncAuto() {
+  $("#compile").hidden = autoBox.checked;
+  try { localStorage.setItem("autoCompile", autoBox.checked ? "1" : "0"); } catch (e) {}
+  if (autoBox.checked && dirty) compile();
+}
+try { autoBox.checked = localStorage.getItem("autoCompile") !== "0"; } catch (e) {}
+autoBox.onchange = syncAuto;
+syncAuto();
+$("#compile").onclick = compile;
+$("#optimize").onchange = requestCompile;
+$("#regs").onchange = requestCompile;
+(async function init() {
+  const q = new URLSearchParams(location.hash.slice(1));
+  try {
+    const ex = await (await fetch("/api/examples")).json();
+    const sel = $("#examples");
+    sel.innerHTML = `<option value="">Load example…</option>` + ex.map((e, i) => `<option value="${i}">${esc(e.name.replace(/_/g, " "))}</option>`).join("");
+    sel.onchange = () => { if (sel.value === "") return; stopAnim(); src.value = ex[+sel.value].source; inputState = {}; updateGutter(); requestCompile(); };
+    if (q.get("tab")) tab = Math.max(0, Math.min(TABS.length - 1, +q.get("tab") - 1));
+    const start = ex.find(e => e.name === (q.get("ex") || "full_adder")) || ex[0];
+    src.value = start ? start.source : "x = a AND b;";
+    if (start) sel.value = String(ex.indexOf(start));
+  } catch (e) { src.value = "x = a AND b;"; }
+  if (q.get("speed")) $("#speed").value = q.get("speed");
+  if (q.get("auto")) { autoBox.checked = q.get("auto") !== "0"; syncAuto(); }
+  updateGutter(); await compile();
+  if (q.get("play")) startAnim();
+})();
+</script>
+</body>
+</html>
