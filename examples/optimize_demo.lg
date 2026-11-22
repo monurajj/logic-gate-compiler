@@ -1,0 +1,10 @@
+# Written badly on purpose, to show every optimisation pass
+input a, b, c;
+output x, y, z;
+
+t     = a AND 1;               # algebraic:  a AND 1 = a
+x     = (t AND b) OR (b AND a);  # CSE (AND is commutative) + OR of same operand
+k     = 1 XOR 0;               # constant folding -> 1
+y     = NOT NOT (c AND k);     # double negation + constant propagation
+unused = a NAND b;             # dead code (never used, not an output)
+z     = (a OR NOT a) AND c;    # complement law: a OR NOT a = 1

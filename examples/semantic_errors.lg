@@ -1,0 +1,11 @@
+# Deliberate SEMANTIC errors (syntax is fine)
+input a, b, a;       # redeclaration of 'a'
+input c;
+output y, z, v;
+
+y = a AND d;         # 'd' is undefined
+b = a OR c;          # cannot assign to an input
+z = z XOR a;         # combinational loop
+y = a;               # 'y' already has a driver
+w = a NAND b;        # warning: wire never used
+                     # error: output 'v' never assigned

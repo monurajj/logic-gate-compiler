@@ -1,0 +1,2 @@
+// The simplest program: inputs are inferred automatically
+x = a AND b;

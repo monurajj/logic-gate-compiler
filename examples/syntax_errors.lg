@@ -1,0 +1,8 @@
+# Deliberate LEXICAL + SYNTAX errors (panic-mode recovery reports all of them)
+input a, b;
+output y, z;
+
+y = a AND ;          # missing operand
+z = a $ b;           # '$' is not a valid character
+w = (a OR b;         # missing ')'
+q = a 2 b;           # invalid constant

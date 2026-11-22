@@ -1,0 +1,10 @@
+/* 1-bit Full Adder
+   sum  = a XOR b XOR cin
+   cout = (a AND b) OR (cin AND (a XOR b)) */
+input a, b, cin;
+output sum, cout;
+
+p    = a XOR b;            # propagate
+g    = a AND b;            # generate
+sum  = p XOR cin;
+cout = g OR (p AND cin);

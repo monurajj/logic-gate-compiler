@@ -1,0 +1,5 @@
+# 2-to-1 Multiplexer: y = a when s = 0, b when s = 1
+input a, b, s;
+output y;
+
+y = (a AND NOT s) OR (b AND s);

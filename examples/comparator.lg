@@ -1,0 +1,7 @@
+# 1-bit magnitude comparator
+input a, b;
+output gt, eq, lt;
+
+gt = a AND NOT b;
+lt = NOT a AND b;
+eq = a XNOR b;
