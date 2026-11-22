@@ -1,0 +1,8 @@
+__pycache__/
+*.pyc
+*.asm
+*.dot
+*.png
+.DS_Store
+.venv/
+.vercel
