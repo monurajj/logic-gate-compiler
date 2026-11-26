@@ -24,7 +24,9 @@ cout = g OR (p AND cin);
 
 Written in pure Python 3 (3.8 or newer). No external libraries are needed.
 
-📄 **Project report:** [PROJECT_REPORT.md](PROJECT_REPORT.md)
+📄 **Project report (IEEE format):** [report/Project_Report_IEEE.pdf](report/Project_Report_IEEE.pdf)
+
+**Implementation track:** AI Product Engineering Track. See [Tools used](#tools-used).
 
 ---
 
@@ -90,6 +92,13 @@ From then on, every push to `main` redeploys the site automatically.
 Safety limits for public use: programs over 20 KB are rejected, expressions
 nested too deeply return an error instead of crashing, and truth tables are
 limited to 12 inputs.
+
+## Requirements and dependencies
+
+* **Python 3.8 or newer.** Nothing else is needed.
+* **No third-party packages.** Only the Python standard library is used (`requirements.txt` is empty on purpose).
+* No build step. Clone the repository and run it.
+* Optional: [Graphviz](https://graphviz.org) to turn `--dot` output into a picture.
 
 ## Quick start
 
@@ -306,16 +315,11 @@ logic-gate-compiler/
 └── tests/                unit tests + random-program (fuzz) tests
 ```
 
-## Suggested work split for the team
+## Individual contribution
 
-| Member | Module(s) | Phase |
-|---|---|---|
-| 1 | `lexer.py` | Lexical analysis |
-| 2 | `parser.py`, `ast_nodes.py` | Syntax analysis |
-| 3 | `semantic.py`, `symbol_table.py`, `errors.py` | Semantic analysis, symbol table, error handling |
-| 4 | `icg.py` | Intermediate code generation |
-| 5 | `optimizer.py` | Code optimisation |
-| 6 | `codegen.py`, `simulator.py` | Code generation, execution and testing |
+| Member | Contribution |
+|---|---|
+| Monu Raj | The whole project: chose the use case, designed the language and grammar, specified and reviewed every phase (all modules in `logicc/`), the web UI, the tests and the Vercel deployment. |
 
 ## Tools used
 

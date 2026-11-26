@@ -1,0 +1,327 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>logicc: A Seven-Phase Compiler for Combinational Logic Circuits with Interactive Phase Visualization</title>
+<!-- IEEE conference-paper layout. Build the PDF with:
+     "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" --headless --no-pdf-header-footer \
+        --print-to-pdf=report/Project_Report_IEEE.pdf report/report.html -->
+<style>
+  @page { size: letter; margin: 0.75in 0.625in 1in 0.625in; }
+  html { font-family: "Times New Roman", Times, serif; font-size: 10pt; line-height: 1.18; color: #000; }
+  body { margin: 0; }
+  .title { text-align: center; font-size: 22pt; line-height: 1.15; margin: 0 0 10pt; font-weight: normal; }
+  .authors { text-align: center; margin-bottom: 14pt; font-size: 10pt; }
+  .authors .name { font-size: 11pt; }
+  .authors i { font-style: italic; }
+  .cols { padding-right: 3pt; column-count: 2; column-gap: 0.25in; column-fill: auto; text-align: justify; hyphens: auto; }
+  p { margin: 0 0 0; text-indent: 1em; }
+  p.noindent, h2 + p, h3 + p, .abstract p { text-indent: 0; }
+  .abstract { font-weight: bold; font-size: 9pt; margin-bottom: 6pt; }
+  .abstract p { text-indent: 1em; }
+  .abstract p:first-child { text-indent: 0; }
+  .abstract i { font-weight: bold; }
+  h2 { font-size: 10pt; font-weight: normal; font-variant: small-caps; text-align: center; margin: 10pt 0 4pt; letter-spacing: .02em; break-after: avoid; }
+  h3 { font-size: 10pt; font-weight: normal; font-style: italic; margin: 6pt 0 2pt; break-after: avoid; }
+  table { border-collapse: collapse; margin: 3pt auto 7pt; font-size: 8pt; break-inside: avoid; }
+  th, td { padding: 1.2pt 4pt; text-align: left; vertical-align: top; }
+  thead tr { border-top: 1pt solid #000; border-bottom: 0.5pt solid #000; }
+  tbody tr:last-child { border-bottom: 1pt solid #000; }
+  .tcap { text-align: center; font-size: 8pt; font-variant: small-caps; margin-top: 6pt; break-after: avoid; }
+  .tcap span { display: block; font-variant: normal; }
+  figure { margin: 6pt 0 8pt; break-inside: avoid; text-align: center; }
+  figcaption { font-size: 8pt; text-align: justify; margin-top: 3pt; }
+  pre { font-family: Menlo, Consolas, "Courier New", monospace; font-size: 7pt; line-height: 1.2; margin: 3pt 0 6pt; padding: 3pt 5pt; border-left: 1pt solid #888; background: #f6f6f6; white-space: pre; break-inside: avoid; text-align: left; overflow: hidden; }
+  code, pre { hyphens: none; }
+  code { white-space: nowrap; }
+  code { font-family: Menlo, Consolas, "Courier New", monospace; font-size: 8pt; }
+  ul, ol { margin: 2pt 0 4pt; padding-left: 1.3em; }
+  li { margin: 0; }
+  .refs { font-size: 8pt; }
+  .refs ol { padding-left: 2em; list-style: none; counter-reset: r; }
+  .refs li { counter-increment: r; position: relative; margin-bottom: 2pt; }
+  .refs li::before { content: "[" counter(r) "]"; position: absolute; left: -2em; }
+  .wide { column-span: all; }
+  svg text { font-family: "Times New Roman", Times, serif; }
+</style>
+</head>
+<body>
+
+<h1 class="title">logicc: A Seven-Phase Compiler for Combinational Logic Circuits with Interactive Phase Visualization</h1>
+
+<div class="authors">
+  <div class="name">Monu Raj</div>
+  <i>Team CD_2023_Team_1 &middot; Compiler Design Course Project</i><br>
+  <i>Source code: https://github.com/monurajj/logic-gate-compiler</i>
+</div>
+
+<div class="cols">
+
+<div class="abstract">
+<p><i>Abstract</i>&mdash;This paper describes <i>logicc</i>, a compiler for a small hardware-description language that defines combinational logic circuits using the AND, OR, NOT, XOR, NAND, NOR and XNOR gates. The compiler has all six phases of the standard compiler model, which are lexical analysis, syntax analysis, semantic analysis, intermediate code generation, code optimization and target code generation. A shared symbol table and error handler support all of them. A seventh phase runs the generated register-machine assembly on a virtual machine for every input combination and compares each output with a direct evaluation of the source program, so every compiled program is checked for correctness on all of its inputs. A web interface shows the tokens, abstract syntax tree, symbol table, three-address code, optimization log, assembly, truth table and a live gate diagram, and can animate the compilation one step at a time. The optimizer reduces a deliberately redundant 12-gate test program to a single gate. A test suite of 20 tests, including 300 randomly generated programs, passes in full.</p>
+<p><i>Index Terms</i>&mdash;compiler design, lexical analysis, recursive-descent parsing, semantic analysis, three-address code, code optimization, register allocation, Boolean logic, combinational circuits.</p>
+</div>
+
+<h2>I. Introduction</h2>
+<p>Compiler design is usually taught with a general-purpose programming language as the example. A full compiler for such a language is too large for a course project, and its output is hard to check for correctness. This project instead uses <i>Boolean logic circuits</i> as the source language. This choice has three advantages:</p>
+<ol>
+<li><i>The language is small but complete.</i> It has declarations, assignments, nested expressions with operator precedence, and named signals, so every phase has real work to do.</li>
+<li><i>The effect of optimization is visible and measurable.</i> Boolean algebra laws such as <code>a AND 1 = a</code> and <code>a OR NOT a = 1</code> remove logic gates, and the number of gates can be counted.</li>
+<li><i>Correctness can be checked completely.</i> A circuit with <i>n</i> inputs has only 2<sup><i>n</i></sup> input combinations. The compiled code can be run on all of them and compared with the source program.</li>
+</ol>
+<p>The objectives of the project were to implement every phase of the textbook pipeline [1], to report <i>all</i> lexical, syntax and semantic errors in a single run with line and column numbers, to apply several optimization passes and show each change, to generate assembly with register allocation and spilling, to check the generated code automatically, and to show every intermediate state of the compiler in an interactive interface.</p>
+
+<h2>II. Source Language</h2>
+<p class="noindent">A program declares its inputs and outputs and then assigns a Boolean expression to each signal. Fig. 1 shows a 1-bit full adder written in the language.</p>
+<figure>
+<pre>input a, b, cin;
+output sum, cout;
+p    = a XOR b;            # propagate
+g    = a AND b;            # generate
+sum  = p XOR cin;
+cout = g OR (p AND cin);</pre>
+<figcaption>Fig. 1. A 1-bit full adder in the <i>logicc</i> language (<code>examples/full_adder.lg</code>). This program is used as the running example in the rest of the paper.</figcaption>
+</figure>
+<p>The language supports the seven gate keywords and the symbol forms <code>&amp; | ^ ! ~</code>, the constants <code>0</code>, <code>1</code>, <code>true</code> and <code>false</code>, and three kinds of comment (<code>#</code>, <code>//</code> and <code>/*&hellip;*/</code>). Keywords are case-insensitive. The language also has a short form. If no <code>input</code> is declared, any name that is used but never assigned becomes an input. If no <code>output</code> is declared, every assigned signal becomes an output. This makes the one-line program <code>x = a AND b;</code> valid.</p>
+
+<h2>III. Methodology and Architecture</h2>
+<p class="noindent">The project follows the <i>AI Product Engineering Track</i> allowed by the course. The compiler was built as a complete application with a generative-AI coding agent (Claude Code [4]), and the author directed and reviewed every step. The work was done one phase at a time, and the Git history records this order: project setup, error handler, Phases 1 to 7, test suite, web interface and deployment. Each phase was specified, implemented, run on the example programs and tested before the next one was started. The implementation is written in Python&nbsp;3 and uses only the standard library.</p>
+<p>Fig. 2 shows the architecture. A driver module (<code>compiler.py</code>) runs the phases in order and stops at the first phase that reports an error. Each phase reports its problems to one shared error handler. The command-line interface (<code>main.py</code>) and the web interface (<code>web.py</code>, plus serverless functions for Vercel deployment) both call the same driver, so they always show the same results.</p>
+<figure>
+<svg viewBox="0 0 330 200" width="100%" xmlns="http://www.w3.org/2000/svg" font-size="9">
+  <defs><marker id="ar" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 z"/></marker></defs>
+  <g fill="none" stroke="#000" stroke-width="0.8">
+    <rect x="10" y="4" width="170" height="16"/><rect x="10" y="30" width="170" height="16"/>
+    <rect x="10" y="56" width="170" height="16"/><rect x="10" y="82" width="170" height="16"/>
+    <rect x="10" y="108" width="170" height="16"/><rect x="10" y="134" width="170" height="16"/>
+    <rect x="10" y="160" width="170" height="16"/>
+    <rect x="215" y="60" width="105" height="50" stroke-dasharray="3,2"/>
+  </g>
+  <g stroke="#000" stroke-width="0.8" marker-end="url(#ar)">
+    <line x1="95" y1="20" x2="95" y2="29"/><line x1="95" y1="46" x2="95" y2="55"/>
+    <line x1="95" y1="72" x2="95" y2="81"/><line x1="95" y1="98" x2="95" y2="107"/>
+    <line x1="95" y1="124" x2="95" y2="133"/><line x1="95" y1="150" x2="95" y2="159"/>
+    <line x1="95" y1="176" x2="95" y2="192"/>
+  </g>
+  <g stroke="#000" stroke-width="0.6" stroke-dasharray="2,2">
+    <line x1="180" y1="64" x2="215" y2="78"/><line x1="180" y1="90" x2="215" y2="85"/>
+    <line x1="180" y1="38" x2="215" y2="72"/><line x1="180" y1="12" x2="215" y2="66"/>
+    <line x1="180" y1="116" x2="215" y2="95"/>
+  </g>
+  <g text-anchor="middle">
+    <text x="95" y="15">1. Lexical analysis (lexer.py)</text>
+    <text x="95" y="41">2. Syntax analysis (parser.py)</text>
+    <text x="95" y="67">3. Semantic analysis (semantic.py)</text>
+    <text x="95" y="93">4. Intermediate code gen. (icg.py)</text>
+    <text x="95" y="119">5. Optimization (optimizer.py)</text>
+    <text x="95" y="145">6. Target code gen. (codegen.py)</text>
+    <text x="95" y="171">7. Execution &amp; verification (simulator.py)</text>
+    <text x="267" y="77">Symbol table</text>
+    <text x="267" y="89">symbol_table.py</text>
+    <text x="267" y="101">Error handler (errors.py)</text>
+    <text x="140" y="198" font-style="italic">truth table, verified result</text>
+  </g>
+</svg>
+<figcaption>Fig. 2. The <i>logicc</i> pipeline. Phases 1&ndash;6 follow the standard compiler model [1]. Phase 7 runs the target code and checks the result. The symbol table and error handler are shared by all phases.</figcaption>
+</figure>
+
+<h2>IV. Phase-by-Phase Design</h2>
+
+<h3>A. Lexical Analysis</h3>
+<p class="noindent">A hand-written scanner reads the source one character at a time. It skips whitespace and comments and produces tokens that record the lexeme, token type, attribute, line and column. Table I lists the token classes. The scanner detects four kinds of lexical error. These are illegal characters such as <code>$</code>, invalid constants such as <code>2</code>, identifiers that start with a digit such as <code>3y</code>, and comments that are never closed. The full adder in Fig. 1 produces 40 tokens.</p>
+<div class="tcap">Table I<span>Token Classes</span></div>
+<table>
+<thead><tr><th>Token</th><th>Lexemes</th></tr></thead>
+<tbody>
+<tr><td><code>INPUT</code>, <code>OUTPUT</code></td><td><code>input</code>, <code>output</code></td></tr>
+<tr><td><code>IDENT</code></td><td><code>a</code>, <code>cin</code>, <code>carry_out</code></td></tr>
+<tr><td><code>CONST</code></td><td><code>0 1 true false</code></td></tr>
+<tr><td><code>OP</code></td><td><code>AND OR NOT XOR NAND NOR XNOR</code><br><code>&amp; | ^ ! ~</code></td></tr>
+<tr><td>Punctuation</td><td><code>= ; , ( )</code></td></tr>
+</tbody>
+</table>
+
+<h3>B. Syntax Analysis</h3>
+<p class="noindent">A recursive-descent LL(1) parser builds an abstract syntax tree (AST) from the grammar in Fig. 3. Each precedence level has its own rule, which gives the order <code>NOT</code> &gt; <code>AND/NAND</code> &gt; <code>XOR/XNOR</code> &gt; <code>OR/NOR</code>. Left recursion is removed by rewriting rules of the form <i>E</i>&nbsp;&rarr;&nbsp;<i>E</i>&nbsp;OR&nbsp;<i>T</i>&nbsp;|&nbsp;<i>T</i> as <i>E</i>&nbsp;&rarr;&nbsp;<i>T</i>&nbsp;(OR&nbsp;<i>T</i>)*. The parser handles the repetition with a loop, so binary operators are left-associative. For error recovery the parser uses <i>panic mode</i>. After a syntax error it skips tokens up to the next <code>;</code> or the start of the next statement, then continues, so one run reports every syntax error in the program.</p>
+<figure>
+<pre>program     → statement* EOF
+statement   → declaration | assignment
+declaration → ("input"|"output") IDENT ("," IDENT)* ";"
+assignment  → IDENT "=" expr ";"
+expr        → or_expr
+or_expr     → xor_expr (("OR" |"NOR")  xor_expr)*
+xor_expr    → and_expr (("XOR"|"XNOR") and_expr)*
+and_expr    → unary    (("AND"|"NAND") unary)*
+unary       → "NOT" unary | primary
+primary     → IDENT | CONST | "(" expr ")"</pre>
+<figcaption>Fig. 3. Grammar of the source language (EBNF). Each line is one rule, and the parser has one function for each rule.</figcaption>
+</figure>
+
+<h3>C. Semantic Analysis and Symbol Table</h3>
+<p class="noindent">The semantic analyzer walks the AST and fills the symbol table. Each entry records the name, kind (input, output or wire), type, declaration line, assignment line and number of uses. Table II shows the entries for the full adder. The analyzer checks the rules that a physical circuit must follow, which are listed in Table III. Combinational loops are an important case. A signal that depends on itself would form a feedback path, and a combinational circuit cannot have one.</p>
+<div class="tcap">Table II<span>Symbol Table for the Full Adder</span></div>
+<table>
+<thead><tr><th>Name</th><th>Kind</th><th>Type</th><th>Decl.</th><th>Assign.</th><th>Uses</th></tr></thead>
+<tbody>
+<tr><td>a, b, cin</td><td>input</td><td>bit</td><td>4</td><td>&ndash;</td><td>2 each</td></tr>
+<tr><td>sum</td><td>output</td><td>bit</td><td>5</td><td>9</td><td>0</td></tr>
+<tr><td>cout</td><td>output</td><td>bit</td><td>5</td><td>10</td><td>0</td></tr>
+<tr><td>p</td><td>wire</td><td>bit</td><td>7</td><td>7</td><td>2</td></tr>
+<tr><td>g</td><td>wire</td><td>bit</td><td>8</td><td>8</td><td>1</td></tr>
+</tbody>
+</table>
+<div class="tcap">Table III<span>Semantic Checks</span></div>
+<table>
+<thead><tr><th>Check</th><th>Example that fails</th></tr></thead>
+<tbody>
+<tr><td>Redeclaration</td><td><code>input a, b, a;</code></td></tr>
+<tr><td>Both input and output</td><td><code>input a; output a;</code></td></tr>
+<tr><td>Assignment to an input</td><td><code>b = a OR c;</code></td></tr>
+<tr><td>Multiple drivers</td><td><code>y = a; y = b;</code></td></tr>
+<tr><td>Undefined / used before definition</td><td><code>y = a AND d;</code></td></tr>
+<tr><td>Combinational loop</td><td><code>z = z XOR a;</code></td></tr>
+<tr><td>Output never assigned</td><td><code>output v;</code> (no driver)</td></tr>
+<tr><td><i>Warning:</i> unused input or wire</td><td><code>w = a NAND b;</code>, <code>w</code> unused</td></tr>
+</tbody>
+</table>
+
+<h3>D. Error Handling</h3>
+<p class="noindent">All phases send their diagnostics to one error handler. Each message has a category (Lexical, Syntax or Semantic), a position, and a plain-language explanation. Messages are collected, sorted and printed together. Fig. 4 shows the output for a test file that contains errors on purpose. Because of panic-mode recovery, all six errors are reported in one run.</p>
+<figure>
+<pre>[Lexical] (6:7)  unexpected character '$'
+[Lexical] (8:7)  invalid constant '2'
+                 (only 0 and 1 are allowed)
+[Syntax]  (5:11) expected an operand
+                 (variable, 0/1 or '('), but found ';'
+[Syntax]  (6:9)  expected ';' after the expression,
+                 but found 'b'
+[Syntax]  (7:12) expected ')' to close '(',
+                 but found ';'
+[Syntax]  (8:9)  expected ';' after the expression,
+                 but found 'b'
+6 error(s), 0 warning(s)</pre>
+<figcaption>Fig. 4. Diagnostics for <code>examples/syntax_errors.lg</code> (shortened). The semantic error example produces six errors and one warning in the same format.</figcaption>
+</figure>
+
+<h3>E. Intermediate Code Generation</h3>
+<p class="noindent">A post-order walk of the AST produces three-address code (TAC), with a new temporary for each gate. The same instructions are also shown as quadruples (<i>op, arg1, arg2, result</i>) and as triples, in which a result is referred to by its instruction number. Fig. 5 shows the TAC for the full adder before and after optimization.</p>
+<figure>
+<pre>Before (9 instr.)        After optimization (5 instr.)
+0: t1 = a XOR b          0: p    = a XOR b
+1: p = t1                1: g    = a AND b
+2: t2 = a AND b          2: sum  = p XOR cin
+3: g = t2                3: t4   = p AND cin
+4: t3 = p XOR cin        4: cout = g OR t4
+5: sum = t3
+6: t4 = p AND cin
+7: t5 = g OR t4
+8: cout = t5</pre>
+<figcaption>Fig. 5. Three-address code for the full adder. Copy coalescing removes the four copy instructions.</figcaption>
+</figure>
+
+<h3>F. Code Optimization</h3>
+<p class="noindent">The optimizer runs the passes in Table IV repeatedly until a full round makes no change. Every change is logged with the instruction before and after it, and the web interface displays this log. Common-subexpression elimination treats commutative gates as equal, so <code>a AND b</code> and <code>b AND a</code> are computed only once. Dead-code elimination works backwards from the outputs and removes every value that no output depends on.</p>
+<div class="tcap">Table IV<span>Optimization Passes</span></div>
+<table>
+<thead><tr><th>Pass</th><th>Before</th><th>After</th></tr></thead>
+<tbody>
+<tr><td>Constant folding</td><td><code>1 XOR 0</code></td><td><code>1</code></td></tr>
+<tr><td>Algebraic laws</td><td><code>a AND 1</code>, <code>a XOR a</code>, <code>a OR NOT a</code></td><td><code>a</code>, <code>0</code>, <code>1</code></td></tr>
+<tr><td>Double negation</td><td><code>NOT NOT x</code></td><td><code>x</code></td></tr>
+<tr><td>CSE (commutative)</td><td><code>a AND b</code> &hellip; <code>b AND a</code></td><td>reused</td></tr>
+<tr><td>Copy/const. prop.</td><td><code>t1=a; t2=t1 OR c</code></td><td><code>t2=a OR c</code></td></tr>
+<tr><td>Copy coalescing</td><td><code>t3=a XOR b; s=t3</code></td><td><code>s=a XOR b</code></td></tr>
+<tr><td>Dead code</td><td>value no output uses</td><td>removed</td></tr>
+</tbody>
+</table>
+<p>The demonstration program <code>examples/optimize_demo.lg</code> is written with redundancy in every statement on purpose. It contains <code>t = a AND 1</code>, <code>x = (t AND b) OR (b AND a)</code>, <code>k = 1 XOR 0</code>, <code>y = NOT NOT (c AND k)</code>, an unused <code>a NAND b</code>, and <code>z = (a OR NOT a) AND c</code>. After four rounds the optimizer reduces it to <code>x = a AND b; y = c; z = c</code>, as Table V shows.</p>
+<div class="tcap">Table V<span>Effect of Optimization</span></div>
+<table>
+<thead><tr><th>Program</th><th>TAC before</th><th>TAC after</th><th>Gates before</th><th>Gates after</th></tr></thead>
+<tbody>
+<tr><td>full_adder</td><td>9</td><td>5</td><td>5</td><td>5</td></tr>
+<tr><td>optimize_demo</td><td>18</td><td>3</td><td>12</td><td>1</td></tr>
+</tbody>
+</table>
+
+<h3>G. Target Code Generation</h3>
+<p class="noindent">The target is LGM (Logic Gate Machine), a register machine designed for this project. It has the instructions <code>LOAD</code>, <code>LOADI</code>, <code>MOV</code>, <code>NOT</code>, the six binary gate operations in three-register form (<code>AND Rd, Ra, Rb</code>), <code>STORE</code> and <code>HALT</code>. Register allocation follows the <i>getReg</i> algorithm in [1]. It keeps a <i>register descriptor</i> that records what each register holds, an <i>address descriptor</i> that records where the current value of each variable is, and <i>next-use</i> information for each instruction. When no register is free, the allocator spills the value whose next use is furthest away. The number of registers can be set on the command line (minimum three). Fig. 6 shows the code for the full adder. The inputs <code>a</code> and <code>b</code> are loaded only once, because the address descriptor shows that they are still in registers.</p>
+<figure>
+<pre>LOAD  R0, a        ; p = a XOR b
+LOAD  R1, b
+XOR   R2, R0, R1
+STORE p, R2
+AND   R0, R0, R1   ; g = a AND b
+STORE g, R0
+LOAD  R3, cin      ; sum = p XOR cin
+XOR   R1, R2, R3
+STORE sum, R1
+AND   R2, R2, R3   ; t4 = p AND cin
+OR    R0, R0, R2   ; cout = g OR t4
+STORE cout, R0
+HALT</pre>
+<figcaption>Fig. 6. LGM assembly for the full adder with four registers: 13 instructions, no spills.</figcaption>
+</figure>
+
+<h3>H. Execution and Verification</h3>
+<p class="noindent">The virtual machine runs the generated assembly once for every one of the 2<sup><i>n</i></sup> input combinations, which gives the truth table and the sum-of-minterms form of each output. For each row, the expected output is also computed by evaluating the original AST directly, without phases 4 to 6. If the two results differ, the compiler has a bug, and the differing rows are reported. For the full adder the result is <i>sum</i>&nbsp;=&nbsp;&Sigma;<i>m</i>(1,&nbsp;2,&nbsp;4,&nbsp;7) and <i>cout</i>&nbsp;=&nbsp;&Sigma;<i>m</i>(3,&nbsp;5,&nbsp;6,&nbsp;7), which are the correct functions [2]. All eight rows match.</p>
+
+<h2>V. Interactive Visualization</h2>
+<p class="noindent">The web interface (<code>python3 -m logicc.web</code>, which can also be deployed on Vercel) has a code editor on the left. It recompiles as the user types and lists errors, and clicking an error moves the cursor to its line. The right side has one step for each phase:</p>
+<ul>
+<li>the token table and token stream;</li>
+<li>a graphical syntax tree, shown with the grammar;</li>
+<li>the symbol table and the results of the semantic checks;</li>
+<li>TAC, quadruples and triples;</li>
+<li>the optimization log, with code before and after;</li>
+<li>the generated assembly and the verified truth table;</li>
+<li>a <i>live circuit</i>, in which the optimized netlist is drawn as logic gates. Clicking an input toggles it, and the wires and output lamps update.</li>
+</ul>
+<p>A <i>step-by-step</i> mode animates the whole compilation. Tokens appear one at a time, the tree is built level by level, and the optimizations are applied one by one. The animation can be paused, stopped or run at 0.5&times; to 4&times; speed. Every technical term in the interface has an information icon with a short explanation. The command-line interface shows the same phases as text tables, and it can stop after any phase (<code>--phase</code>), turn optimization off (<code>-O0</code>), set the number of registers (<code>--regs</code>), and export a Graphviz diagram of the circuit (<code>--dot</code>).</p>
+
+<h2>VI. Testing and Results</h2>
+<p class="noindent">The test suite has 20 tests in seven groups (Table VI), and all of them pass in about 0.5&nbsp;s. The most important is a <i>differential fuzz test</i>. It generates 300 random circuits with 1&ndash;4 inputs, up to five signals and nested expressions. It compiles each one both with and without optimization, using 3&ndash;6 registers, and requires the virtual machine's output to match direct evaluation of the AST for every input combination. This tests the parser, intermediate code generator, optimizer, register allocator and virtual machine together, on programs that were not written by hand. A separate test compiles a four-input circuit with only three registers. It checks that the register allocator spills and that the result is still correct.</p>
+<div class="tcap">Table VI<span>Test Suite (20 Tests, All Passing)</span></div>
+<table>
+<thead><tr><th>Group</th><th>What is tested</th></tr></thead>
+<tbody>
+<tr><td>Lexer</td><td>Token types; lexical errors</td></tr>
+<tr><td>Parser</td><td>Precedence; left associativity; several errors in one run</td></tr>
+<tr><td>Semantic</td><td>Every error type; implicit mode; unused-signal warning</td></tr>
+<tr><td>Optimizer</td><td>Each pass; demo program reduced to one gate</td></tr>
+<tr><td>End-to-end</td><td>Full adder; all 8 examples; register spilling</td></tr>
+<tr><td>Fuzz</td><td>300 random programs, &plusmn;optimization, 3&ndash;6 registers</td></tr>
+<tr><td>Web API</td><td>Compile request returns correct JSON</td></tr>
+</tbody>
+</table>
+<p>The repository includes eight example programs: a simple gate, a half adder, a full adder, a 2-to-1 multiplexer, a 1-bit magnitude comparator, the optimization demo, and one file each for lexical/syntax errors and semantic errors. Each example compiles with the expected result, and the two error files are correctly rejected. The compiler is about 1,800 lines of Python. With the web interface, serverless API and tests, the project is about 3,000 lines.</p>
+
+<h2>VII. Individual Member Contribution</h2>
+<p class="noindent">The team has one member, Monu Raj, who carried out the whole project. This included choosing the use case, designing the source language and grammar, and specifying the behavior of each phase, the error messages, the instruction set of the target machine and the web interface. The phases were built in order, and each one was reviewed, run and tested before work on the next began. Monu Raj also deployed the application. The modules are <code>lexer.py</code>, <code>parser.py</code>, <code>ast_nodes.py</code>, <code>semantic.py</code>, <code>symbol_table.py</code>, <code>errors.py</code>, <code>icg.py</code>, <code>optimizer.py</code>, <code>codegen.py</code>, <code>simulator.py</code>, <code>circuit.py</code>, <code>compiler.py</code>, <code>main.py</code>, <code>web.py</code>, the web page, the Vercel functions and the test suite.</p>
+<p>As allowed by the AI Product Engineering Track, a generative-AI coding agent (Claude Code [4]) wrote much of the source code from these specifications. Commits it helped write are marked <code>Co-Authored-By: Claude</code> in the Git history, so the use of AI can be checked from the repository.</p>
+
+<h2>VIII. Future Scope</h2>
+<ul>
+<li><i>Sequential logic:</i> flip-flops, registers and a clock, which would need a new kind of semantic check for timing loops.</li>
+<li><i>Modules and multi-bit buses:</i> defining a circuit once and reusing it, and signals such as <code>a[3:0]</code>, for example to build a 4-bit adder from full adders.</li>
+<li><i>Global minimization:</i> adding the Quine&ndash;McCluskey method [3] or Karnaugh-map minimization to find minimal circuits. The current rule-based passes only make local improvements.</li>
+<li><i>Multi-target code generation:</i> generating Verilog for FPGA synthesis and C for software simulation, in addition to LGM assembly.</li>
+<li><i>Faster verification for large circuits:</i> exhaustive checking grows as 2<sup><i>n</i></sup>, so the web interface limits truth tables to 12 inputs. Equivalence checking with binary decision diagrams or a SAT solver would remove this limit.</li>
+</ul>
+
+<h2>IX. Conclusion</h2>
+<p class="noindent"><i>logicc</i> takes a logic-circuit description through every phase of the standard compiler pipeline, with a shared symbol table and error handler, and adds a verification phase. Because the source language is Boolean logic, the compiler can check every compiled program against its source on all inputs. A fuzz test applies the same check to 300 random programs. The error handler reports all lexical, syntax and semantic errors in one run. The optimizer reduces circuits by a measurable amount (12 gates to 1 in the demonstration). The interactive interface shows each intermediate state, which makes the project useful both as a working compiler and as a tool for teaching how compilers work.</p>
+
+<h2>References</h2>
+<div class="refs">
+<ol>
+<li>A. V. Aho, M. S. Lam, R. Sethi, and J. D. Ullman, <i>Compilers: Principles, Techniques, and Tools</i>, 2nd ed. Boston, MA, USA: Pearson, 2006.</li>
+<li>M. M. Mano and M. D. Ciletti, <i>Digital Design</i>, 5th ed. Boston, MA, USA: Pearson, 2013.</li>
+<li>E. J. McCluskey, &ldquo;Minimization of Boolean functions,&rdquo; <i>Bell Syst. Tech. J.</i>, vol. 35, no. 6, pp. 1417&ndash;1444, Nov. 1956.</li>
+<li>Anthropic, &ldquo;Claude Code,&rdquo; 2026. [Online]. Available: https://claude.com/claude-code</li>
+</ol>
+</div>
+
+</div>
+</body>
+</html>
