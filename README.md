@@ -24,6 +24,8 @@ cout = g OR (p AND cin);
 
 Written in pure Python 3 (3.8 or newer). No external libraries are needed.
 
+📄 **Project report:** [PROJECT_REPORT.md](PROJECT_REPORT.md)
+
 ---
 
 ## Web UI (for demos)
